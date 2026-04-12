@@ -1,0 +1,9 @@
+Options -MultiViews
+RewriteEngine On
+
+# Não redirecionar arquivos ou diretórios que existem de fato
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Tudo mais vai para o index.html (React Router cuida das rotas)
+RewriteRule ^ index.html [L]
