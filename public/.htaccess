@@ -1,6 +1,12 @@
 Options -MultiViews
 RewriteEngine On
 
+# Bloqueia acesso HTTP a arquivos sensíveis
+<FilesMatch "^\.env(\..*)?$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
 # Não redirecionar arquivos ou diretórios que existem de fato
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
