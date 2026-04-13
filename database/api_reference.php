@@ -94,7 +94,19 @@ define('MP_SANDBOX',        getenv('MP_SANDBOX') === 'true');
 // ═══ BOOTSTRAP ═════════════════════════════════════════════════════════════════
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: ' . SITE_URL);
+
+// Permite SITE_URL em produção e localhost (qualquer porta) em desenvolvimento
+$origin         = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowedOrigins = [SITE_URL];
+// Aceita qualquer localhost para facilitar dev local
+if (preg_match('#^https?://localhost(:\d+)?$#', $origin) ||
+    preg_match('#^https?://127\.0\.0\.1(:\d+)?$#', $origin)) {
+    $allowedOrigins[] = $origin;
+}
+$corsOrigin = in_array($origin, $allowedOrigins, true) ? $origin : SITE_URL;
+header('Access-Control-Allow-Origin: ' . $corsOrigin);
+header('Vary: Origin');
+header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Master-Key, X-Signature, X-Request-Id');
 
@@ -1332,6 +1344,33 @@ function handle_admin_get_site(PDO $db): void
             'active'           => (bool) $g['active'],
         ], $gs->fetchAll()),
     ]);
+}
+
+function handle_admin_get_gifts(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    $gs = $db->prepare(
+        'SELECT id, slug, title, subtitle, description,
+                CAST(suggested_amount AS CHAR) AS suggested_amount,
+                tag, tag_color, emoji_name, display_order, active
+           FROM gift_items WHERE couple_id = ? ORDER BY display_order ASC'
+    );
+    $gs->execute([$couple_id]);
+
+    echo json_encode(array_map(static fn($g) => [
+        'id'               => $g['id'],
+        'slug'             => $g['slug'],
+        'title'            => $g['title'],
+        'subtitle'         => $g['subtitle']         ?? '',
+        'description'      => $g['description']      ?? '',
+        'suggested_amount' => $g['suggested_amount'] !== null ? (float) $g['suggested_amount'] : null,
+        'tag'              => $g['tag']              ?? '',
+        'tag_color'        => $g['tag_color']        ?? '',
+        'emoji_name'       => $g['emoji_name']       ?? 'gift',
+        'display_order'    => (int) $g['display_order'],
+        'active'           => (bool) $g['active'],
+    ], $gs->fetchAll()));
 }
 
 function handle_admin_save_couple(PDO $db): void
