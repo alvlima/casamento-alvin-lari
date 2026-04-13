@@ -48,12 +48,23 @@
 // Aspas simples ou duplas ao redor do valor são removidas automaticamente.
 
 (static function (): void {
-    // Tenta HOME, depois o pai do DOCUMENT_ROOT (padrão HostGator: /home1/alvar028)
+    // Tenta, em ordem:
+    // 1. $HOME/.env            — fora do webroot (ideal)
+    // 2. dirname(docRoot)/.env — pai do webroot (ex: /home1/alvar028/.env)
+    // 3. docRoot/.env          — dentro do webroot (cPanel compartilhado com pasta de domínio)
     $home    = rtrim($_SERVER['HOME'] ?? '', '/');
     $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
-    $envFile = ($home && is_readable("{$home}/.env"))
-               ? "{$home}/.env"
-               : dirname($docRoot) . '/.env';
+
+    $candidates = array_filter([
+        $home    ? "{$home}/.env"              : '',
+        $docRoot ? dirname($docRoot) . '/.env' : '',
+        $docRoot ? "{$docRoot}/.env"           : '',
+    ]);
+
+    $envFile = '';
+    foreach ($candidates as $candidate) {
+        if (is_readable($candidate)) { $envFile = $candidate; break; }
+    }
 
     if (!is_readable($envFile)) {
         return;   // sem .env → depende das variáveis já definidas no ambiente
