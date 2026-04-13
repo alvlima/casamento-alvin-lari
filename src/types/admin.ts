@@ -94,6 +94,51 @@ export interface AdminRifaData {
   };
 }
 
+// ── Editor de Site (admin) ────────────────────────────────────────────────────
+
+export interface SiteEditorCouple {
+  display_name:     string;
+  home_name:        string;
+  partner1:         string;
+  partner2:         string;
+  wedding_date:     string;   // 'YYYY-MM-DD'
+  wedding_time:     string;   // 'HH:MM'
+  wedding_location: string;
+  pix_key:          string;
+}
+
+export interface SiteEditorContent {
+  intro_title:    string;
+  intro_subtitle: string;
+}
+
+export interface SiteEditorRoom {
+  title:     string;
+  desc:      string;
+  nextText?: string;
+}
+
+export interface AdminGiftItem {
+  id:               string;
+  slug:             string;
+  title:            string;
+  subtitle:         string;
+  description:      string;
+  suggested_amount: number | null;
+  tag:              string;
+  tag_color:        string;
+  emoji_name:       string;
+  display_order:    number;
+  active:           boolean;
+}
+
+export interface AdminSiteData {
+  couple:  SiteEditorCouple;
+  content: SiteEditorContent;
+  rooms:   Record<string, SiteEditorRoom>;
+  gifts:   AdminGiftItem[];
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 export interface DashboardStats {

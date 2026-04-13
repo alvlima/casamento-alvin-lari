@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Não redirecionar arquivos que existem de fato (ex: schema.sql)
+RewriteCond %{REQUEST_FILENAME} !-f
+
+# Todas as rotas da API vão para api_reference.php
+RewriteRule ^(.*)$ api_reference.php [QSA,L]

@@ -4,6 +4,7 @@ import {
   X, Users, CheckCircle2, XCircle, Gift, TrendingUp,
   Search, MessageSquare, Calendar, ChevronDown, ChevronUp,
   RefreshCw, LogOut, Ticket, Plus, Pencil, Trash2, Save, Ban,
+  Settings, Eye, EyeOff,
 } from 'lucide-react';
 import {
   fetchDashboardStats,
@@ -15,6 +16,13 @@ import {
   addRifaPrize,
   updateRifaPrize,
   deleteRifaPrize,
+  fetchAdminSite,
+  saveAdminCouple,
+  saveAdminContent,
+  saveAdminRooms,
+  addAdminGift,
+  updateAdminGift,
+  deleteAdminGift,
 } from '../services/adminData';
 import type {
   DashboardStats,
@@ -24,9 +32,13 @@ import type {
   AdminRifaData,
   RifaConfig,
   RifaPrize,
+  AdminSiteData,
+  SiteEditorCouple,
+  SiteEditorContent,
+  AdminGiftItem,
 } from '../types/admin';
 
-type Tab = 'overview' | 'rsvp' | 'gifts' | 'rifa';
+type Tab = 'overview' | 'rsvp' | 'gifts' | 'rifa' | 'site';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -311,18 +323,389 @@ const GiftsTab = memo(({ summaries, contributions }: GiftsTabProps) => {
 });
 GiftsTab.displayName = 'GiftsTab';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-bold text-slate-500 block mb-1">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls = 'w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 focus:outline-none focus:border-[#94A684] focus:bg-white transition-colors';
+const textareaCls = `${inputCls} resize-none`;
+
+function SaveBar({ saving, msg, onSave }: { saving: boolean; msg: string; onSave: () => void }) {
+  const ok = msg.toLowerCase().includes('salvo') || msg.toLowerCase().includes('salva');
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all disabled:opacity-50"
+      >
+        {saving ? 'Salvando...' : 'Salvar'}
+      </button>
+      {msg && <p className={`text-xs font-bold ${ok ? 'text-[#94A684]' : 'text-red-500'}`}>{msg}</p>}
+    </div>
+  );
+}
+
+function Section({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-50 transition-colors"
+      >
+        <p className="text-[11px] font-black uppercase tracking-widest text-slate-600">{title}</p>
+        {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Site tab ───────────────────────────────────────────────────────────────────
+
+const ROOM_LABELS: Record<string, string> = {
+  entrada:    'Entrada',
+  sala:       'Sala',
+  escritorio: 'Escritório',
+  varanda:    'Varanda',
+};
+
+const EMPTY_GIFT: Omit<AdminGiftItem, 'id'> = {
+  slug: '', title: '', subtitle: '', description: '',
+  suggested_amount: null, tag: '', tag_color: '', emoji_name: 'gift',
+  display_order: 0, active: true,
+};
+
+const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () => Promise<void> }) => {
+  // ── Casal ──
+  const [couple, setCouple]       = useState<SiteEditorCouple>({ ...data.couple });
+  const [coupleSaving, setCS]     = useState(false);
+  const [coupleMsg,    setCMsg]   = useState('');
+
+  // ── Conteúdo ──
+  const [content, setContent]     = useState<SiteEditorContent>({ ...data.content });
+  const [contentSaving, setContS] = useState(false);
+  const [contentMsg, setContMsg]  = useState('');
+
+  // ── Cômodos ──
+  const [rooms, setRooms]         = useState({ ...data.rooms });
+  const [roomsSaving, setRS]      = useState(false);
+  const [roomsMsg, setRMsg]       = useState('');
+
+  // ── Presentes ──
+  const gifts = data.gifts;
+  const [giftEdit, setGiftEdit]   = useState<string | 'new' | null>(null);
+  const [giftForm, setGiftForm]   = useState<Omit<AdminGiftItem, 'id'>>(EMPTY_GIFT);
+  const [giftSaving, setGS]       = useState(false);
+  const [giftMsg, setGiftMsg]     = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+
+  const save = useCallback(async (
+    fn: () => Promise<void>,
+    setSaving: (v: boolean) => void,
+    setMsg: (v: string) => void,
+    successMsg = 'Salvo com sucesso!'
+  ) => {
+    setSaving(true); setMsg('');
+    try {
+      await fn();
+      await onRefresh();
+      setMsg(successMsg);
+      setTimeout(() => setMsg(''), 2500);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }, [onRefresh]);
+
+  const updateRoom = useCallback((key: string, field: string, value: string) => {
+    setRooms((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  }, []);
+
+  const openNewGift  = useCallback(() => {
+    setGiftForm({ ...EMPTY_GIFT, display_order: gifts.length + 1 });
+    setGiftEdit('new'); setGiftMsg('');
+  }, [gifts.length]);
+
+  const openEditGift = useCallback((g: AdminGiftItem) => {
+    setGiftForm({ slug: g.slug, title: g.title, subtitle: g.subtitle, description: g.description,
+                  suggested_amount: g.suggested_amount, tag: g.tag, tag_color: g.tag_color,
+                  emoji_name: g.emoji_name, display_order: g.display_order, active: g.active });
+    setGiftEdit(g.id); setGiftMsg('');
+  }, []);
+
+  const handleSaveGift = useCallback(async () => {
+    if (!giftForm.slug || !giftForm.title) { setGiftMsg('Slug e título são obrigatórios.'); return; }
+    setGS(true); setGiftMsg('');
+    try {
+      if (giftEdit === 'new') await addAdminGift(giftForm);
+      else await updateAdminGift(giftEdit!, giftForm);
+      setGiftEdit(null);
+      await onRefresh();
+    } catch (e) { setGiftMsg((e as Error).message); }
+    finally { setGS(false); }
+  }, [giftEdit, giftForm, onRefresh]);
+
+  const handleDeleteGift = useCallback(async (id: string) => {
+    if (!confirm('Desativar este presente?')) return;
+    try { await deleteAdminGift(id); await onRefresh(); }
+    catch (e) { alert((e as Error).message); }
+  }, [onRefresh]);
+
+  const visibleGifts = useMemo(
+    () => showInactive ? gifts : gifts.filter((g) => g.active),
+    [gifts, showInactive]
+  );
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Casal ── */}
+      <Section title="Casal — nomes, data e local" defaultOpen>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Nome de exibição (ex: Larissa & Alvaro)">
+            <input className={inputCls} value={couple.display_name}
+              onChange={(e) => setCouple((c) => ({ ...c, display_name: e.target.value }))} />
+          </Field>
+          <Field label="Nome do apartamento / lar">
+            <input className={inputCls} value={couple.home_name}
+              onChange={(e) => setCouple((c) => ({ ...c, home_name: e.target.value }))} />
+          </Field>
+          <Field label="Nome — Parceiro 1">
+            <input className={inputCls} value={couple.partner1}
+              onChange={(e) => setCouple((c) => ({ ...c, partner1: e.target.value }))} />
+          </Field>
+          <Field label="Nome — Parceiro 2">
+            <input className={inputCls} value={couple.partner2}
+              onChange={(e) => setCouple((c) => ({ ...c, partner2: e.target.value }))} />
+          </Field>
+          <Field label="Data do casamento (YYYY-MM-DD)">
+            <input className={inputCls} type="date" value={couple.wedding_date}
+              onChange={(e) => setCouple((c) => ({ ...c, wedding_date: e.target.value }))} />
+          </Field>
+          <Field label="Horário (HH:MM)">
+            <input className={inputCls} type="time" value={couple.wedding_time}
+              onChange={(e) => setCouple((c) => ({ ...c, wedding_time: e.target.value }))} />
+          </Field>
+          <Field label="Local do casamento">
+            <input className={inputCls} value={couple.wedding_location}
+              onChange={(e) => setCouple((c) => ({ ...c, wedding_location: e.target.value }))} />
+          </Field>
+          <Field label="Chave Pix">
+            <input className={inputCls} value={couple.pix_key}
+              onChange={(e) => setCouple((c) => ({ ...c, pix_key: e.target.value }))} />
+          </Field>
+        </div>
+        <SaveBar saving={coupleSaving} msg={coupleMsg}
+          onSave={() => save(() => saveAdminCouple(couple), setCS, setCMsg)} />
+      </Section>
+
+      {/* ── Conteúdo / Intro ── */}
+      <Section title="Tela inicial — título e subtítulo">
+        <p className="text-xs text-slate-400 -mt-2">Use <code className="bg-slate-100 px-1 rounded">|</code> no título para quebrar em itálico (ex: <code className="bg-slate-100 px-1 rounded">Um Convite | fora dos Dados.</code>)</p>
+        <Field label="Título da intro">
+          <input className={inputCls} value={content.intro_title}
+            onChange={(e) => setContent((c) => ({ ...c, intro_title: e.target.value }))} />
+        </Field>
+        <Field label="Subtítulo / parágrafo de boas-vindas">
+          <textarea className={textareaCls} rows={3} value={content.intro_subtitle}
+            onChange={(e) => setContent((c) => ({ ...c, intro_subtitle: e.target.value }))} />
+        </Field>
+        <SaveBar saving={contentSaving} msg={contentMsg}
+          onSave={() => save(() => saveAdminContent(content), setContS, setContMsg)} />
+      </Section>
+
+      {/* ── Cômodos ── */}
+      <Section title="Cômodos — títulos e descrições">
+        <div className="space-y-5">
+          {Object.entries(ROOM_LABELS).map(([key, label]) => {
+            const r = rooms[key] ?? { title: '', desc: '', nextText: '' };
+            return (
+              <div key={key} className="p-4 rounded-xl border border-slate-100 space-y-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">{label}</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Título">
+                    <input className={inputCls} value={r.title}
+                      onChange={(e) => updateRoom(key, 'title', e.target.value)} />
+                  </Field>
+                  {key !== 'varanda' && (
+                    <Field label="Texto do botão de avançar">
+                      <input className={inputCls} value={r.nextText ?? ''}
+                        onChange={(e) => updateRoom(key, 'nextText', e.target.value)} />
+                    </Field>
+                  )}
+                </div>
+                <Field label="Descrição">
+                  <textarea className={textareaCls} rows={2} value={r.desc}
+                    onChange={(e) => updateRoom(key, 'desc', e.target.value)} />
+                </Field>
+              </div>
+            );
+          })}
+        </div>
+        <SaveBar saving={roomsSaving} msg={roomsMsg}
+          onSave={() => save(() => saveAdminRooms(rooms), setRS, setRMsg)} />
+      </Section>
+
+      {/* ── Presentes ── */}
+      <Section title="Lista de presentes">
+        <div className="flex items-center justify-between mb-1">
+          <button
+            onClick={() => setShowInactive((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors"
+          >
+            {showInactive ? <EyeOff size={13} /> : <Eye size={13} />}
+            {showInactive ? 'Ocultar inativos' : 'Mostrar inativos'}
+          </button>
+          {giftEdit === null && (
+            <button onClick={openNewGift}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all">
+              <Plus size={13} /> Novo presente
+            </button>
+          )}
+        </div>
+
+        {/* Inline form */}
+        <AnimatePresence>
+          {giftEdit !== null && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-2">
+              <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50 space-y-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  {giftEdit === 'new' ? 'Novo presente' : 'Editar presente'}
+                </p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <Field label="Slug (único, sem espaços)">
+                    <input className={inputCls} value={giftForm.slug}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/\s/g, '-') }))} />
+                  </Field>
+                  <Field label="Ícone Lucide (emoji_name)">
+                    <input className={inputCls} value={giftForm.emoji_name}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, emoji_name: e.target.value }))} />
+                  </Field>
+                  <Field label="Ordem">
+                    <input className={inputCls} type="number" min="1" value={giftForm.display_order}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 0 }))} />
+                  </Field>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Título *">
+                    <input className={inputCls} value={giftForm.title}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, title: e.target.value }))} />
+                  </Field>
+                  <Field label="Subtítulo">
+                    <input className={inputCls} value={giftForm.subtitle}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, subtitle: e.target.value }))} />
+                  </Field>
+                </div>
+                <Field label="Descrição">
+                  <textarea className={textareaCls} rows={2} value={giftForm.description}
+                    onChange={(e) => setGiftForm((f) => ({ ...f, description: e.target.value }))} />
+                </Field>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <Field label="Valor sugerido (R$)">
+                    <input className={inputCls} type="number" min="0" step="0.01"
+                      value={giftForm.suggested_amount ?? ''}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, suggested_amount: e.target.value === '' ? null : parseFloat(e.target.value) }))} />
+                  </Field>
+                  <Field label="Tag (ex: Missão Urgente)">
+                    <input className={inputCls} value={giftForm.tag}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, tag: e.target.value }))} />
+                  </Field>
+                  <Field label="Cor da tag (classes Tailwind)">
+                    <input className={inputCls} value={giftForm.tag_color} placeholder="bg-orange-100 text-orange-600"
+                      onChange={(e) => setGiftForm((f) => ({ ...f, tag_color: e.target.value }))} />
+                  </Field>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input id="gift-active" type="checkbox" className="rounded" checked={giftForm.active}
+                    onChange={(e) => setGiftForm((f) => ({ ...f, active: e.target.checked }))} />
+                  <label htmlFor="gift-active" className="text-xs font-bold text-slate-500">Ativo (visível no site)</label>
+                </div>
+                {giftMsg && <p className="text-xs font-bold text-red-500">{giftMsg}</p>}
+                <div className="flex gap-2">
+                  <button onClick={handleSaveGift} disabled={giftSaving}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all disabled:opacity-50">
+                    <Save size={13} />{giftSaving ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button onClick={() => { setGiftEdit(null); setGiftMsg(''); }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
+                    <Ban size={13} />Cancelar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Lista */}
+        {visibleGifts.length === 0 && giftEdit === null && (
+          <p className="text-sm text-slate-400 italic text-center py-4">Nenhum presente cadastrado.</p>
+        )}
+        <div className="space-y-2">
+          {visibleGifts.map((g) => (
+            <div key={g.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${g.active ? 'border-slate-100 hover:border-slate-200' : 'border-dashed border-slate-200 opacity-50'}`}>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="text-[10px] font-black text-slate-300 w-5 text-center">{g.display_order}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900 truncate">{g.title}</p>
+                  <p className="text-xs text-slate-400">{g.slug} · {g.suggested_amount != null ? `R$ ${fmt(g.suggested_amount)}` : 'Livre'}{!g.active && ' · inativo'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => openEditGift(g)} disabled={giftEdit !== null}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-30">
+                  <Pencil size={13} />
+                </button>
+                <button onClick={() => handleDeleteGift(g.id)} disabled={giftEdit !== null}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+    </div>
+  );
+});
+SiteTab.displayName = 'SiteTab';
+
 // ── Rifa tab ──────────────────────────────────────────────────────────────────
 
 const EMPTY_PRIZE: Omit<RifaPrize, 'id'> = { title: '', description: '', display_order: 1 };
 
-const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () => void }) => {
+const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () => Promise<void> }) => {
   // ── Config ──
   const [cfg, setCfg]         = useState<RifaConfig>({ ...data.config });
   const [cfgSaving, setCfgSaving] = useState(false);
   const [cfgMsg, setCfgMsg]   = useState('');
 
   // ── Prizes ──
-  const [prizes, setPrizes]   = useState<RifaPrize[]>(data.prizes);
+  const prizes = data.prizes;
   const [editId, setEditId]   = useState<string | 'new' | null>(null);
   const [form, setForm]       = useState<Omit<RifaPrize, 'id'>>(EMPTY_PRIZE);
   const [prizeLoading, setPrizeLoading] = useState(false);
@@ -336,6 +719,7 @@ const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () 
     setCfgMsg('');
     try {
       await saveRifaConfig(cfg);
+      await onRefresh();
       setCfgMsg('Configuração salva!');
       setTimeout(() => setCfgMsg(''), 2500);
     } catch (e) {
@@ -343,7 +727,7 @@ const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () 
     } finally {
       setCfgSaving(false);
     }
-  }, [cfg]);
+  }, [cfg, onRefresh]);
 
   const openNew = useCallback(() => {
     setForm({ ...EMPTY_PRIZE, display_order: prizes.length + 1 });
@@ -365,32 +749,28 @@ const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () 
     setPrizeMsg('');
     try {
       if (editId === 'new') {
-        const saved = await addRifaPrize(form);
-        setPrizes((prev) => [...prev, saved].sort((a, b) => a.display_order - b.display_order));
+        await addRifaPrize(form);
       } else {
         await updateRifaPrize(editId!, form);
-        setPrizes((prev) =>
-          prev.map((p) => (p.id === editId ? { ...form, id: editId! } : p))
-              .sort((a, b) => a.display_order - b.display_order)
-        );
       }
       setEditId(null);
+      await onRefresh();
     } catch (e) {
       setPrizeMsg((e as Error).message);
     } finally {
       setPrizeLoading(false);
     }
-  }, [editId, form]);
+  }, [editId, form, onRefresh]);
 
   const handleDeletePrize = useCallback(async (id: string) => {
     if (!confirm('Excluir este prêmio?')) return;
     try {
       await deleteRifaPrize(id);
-      setPrizes((prev) => prev.filter((p) => p.id !== id));
+      await onRefresh();
     } catch (e) {
       alert((e as Error).message);
     }
-  }, []);
+  }, [onRefresh]);
 
   const { sold, pending, stats } = data.tickets;
   const drawPct = Math.round(cfg.draw_threshold_pct * 100);
@@ -658,27 +1038,47 @@ interface AdminPanelProps {
 export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
   const [tab, setTab] = useState<Tab>('overview');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [rsvp, setRsvp] = useState<RsvpResponse[]>([]);
   const [summaries, setSummaries] = useState<GiftSummary[]>([]);
   const [contributions, setContributions] = useState<GiftContribution[]>([]);
   const [rifaData, setRifaData] = useState<AdminRifaData | null>(null);
+  const [siteData, setSiteData] = useState<AdminSiteData | null>(null);
+
+  const refreshRifa = useCallback(async () => {
+    const rifa = await fetchAdminRifa();
+    setRifaData(rifa);
+  }, []);
+
+  const refreshSite = useCallback(async () => {
+    const site = await fetchAdminSite();
+    setSiteData(site);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [s, r, gs, gc, rifa] = await Promise.all([
-      fetchDashboardStats(),
-      fetchRsvpResponses(),
-      fetchGiftSummary(),
-      fetchGiftContributions(),
-      fetchAdminRifa(),
-    ]);
-    setStats(s);
-    setRsvp(r);
-    setSummaries(gs);
-    setContributions(gc);
-    setRifaData(rifa);
-    setLoading(false);
+    setLoadError('');
+    try {
+      const [s, r, gs, gc, rifa, site] = await Promise.all([
+        fetchDashboardStats(),
+        fetchRsvpResponses(),
+        fetchGiftSummary(),
+        fetchGiftContributions(),
+        fetchAdminRifa(),
+        fetchAdminSite(),
+      ]);
+      setStats(s);
+      setRsvp(r);
+      setSummaries(gs);
+      setContributions(gc);
+      setRifaData(rifa);
+      setSiteData(site);
+    } catch (e) {
+      setLoadError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -688,6 +1088,7 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
     { id: 'rsvp',     label: 'Presenças',    icon: <Users size={16} /> },
     { id: 'gifts',    label: 'Presentes',    icon: <Gift size={16} /> },
     { id: 'rifa',     label: 'Rifa',         icon: <Ticket size={16} /> },
+    { id: 'site',     label: 'Editar Site',  icon: <Settings size={16} /> },
   ];
 
   return (
@@ -758,6 +1159,16 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
           <div className="flex items-center justify-center py-20">
             <RefreshCw size={24} className="animate-spin text-slate-300" />
           </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <p className="text-sm font-bold text-red-500 text-center max-w-sm">{loadError}</p>
+            <button
+              onClick={load}
+              className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all"
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : (
           <AnimatePresence mode="wait">
             <motion.div
@@ -770,7 +1181,8 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
               {tab === 'overview' && stats && <OverviewTab stats={stats} />}
               {tab === 'rsvp' && <RsvpTab responses={rsvp} />}
               {tab === 'gifts' && <GiftsTab summaries={summaries} contributions={contributions} />}
-              {tab === 'rifa' && rifaData && <RifaTab data={rifaData} onRefresh={load} />}
+              {tab === 'rifa' && rifaData && <RifaTab data={rifaData} onRefresh={refreshRifa} />}
+              {tab === 'site' && siteData && <SiteTab data={siteData} onRefresh={refreshSite} />}
             </motion.div>
           </AnimatePresence>
         )}

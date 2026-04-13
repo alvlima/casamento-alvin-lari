@@ -48,9 +48,12 @@
 // Aspas simples ou duplas ao redor do valor são removidas automaticamente.
 
 (static function (): void {
-    // Caminho absoluto do home: /home/alvar028 no cPanel, ~ no localhost
-    $home    = rtrim($_SERVER['HOME'] ?? '/home/alvar028', '/');
-    $envFile = "{$home}/.env";
+    // Tenta HOME, depois o pai do DOCUMENT_ROOT (padrão HostGator: /home1/alvar028)
+    $home    = rtrim($_SERVER['HOME'] ?? '', '/');
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    $envFile = ($home && is_readable("{$home}/.env"))
+               ? "{$home}/.env"
+               : dirname($docRoot) . '/.env';
 
     if (!is_readable($envFile)) {
         return;   // sem .env → depende das variáveis já definidas no ambiente
@@ -115,7 +118,8 @@ try {
 
 // ═══ ROTEADOR ══════════════════════════════════════════════════════════════════
 
-$path   = preg_replace('#^/api#', '', parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+// Strip both /database (production path) and /api (legacy) from the URI
+$path   = preg_replace('#^/(database|api)#', '', parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 $method = $_SERVER['REQUEST_METHOD'];
 
 if      ($method === 'GET'  && $path === '/config')               handle_get_config($db);
@@ -139,6 +143,16 @@ elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/rifa/prizes/'))
                                                                    handle_admin_update_prize($db, substr($path, 21));
 elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/rifa/prizes/'))
                                                                    handle_admin_delete_prize($db, substr($path, 21));
+elseif  ($method === 'GET'    && $path === '/admin/site')          handle_admin_get_site($db);
+elseif  ($method === 'POST'   && $path === '/admin/site/couple')   handle_admin_save_couple($db);
+elseif  ($method === 'POST'   && $path === '/admin/site/content')  handle_admin_save_content($db);
+elseif  ($method === 'POST'   && $path === '/admin/site/rooms')    handle_admin_save_rooms($db);
+elseif  ($method === 'GET'    && $path === '/admin/gifts')         handle_admin_get_gifts($db);
+elseif  ($method === 'POST'   && $path === '/admin/gifts')         handle_admin_add_gift($db);
+elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/gifts/'))
+                                                                   handle_admin_update_gift($db, substr($path, 14));
+elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/gifts/'))
+                                                                   handle_admin_delete_gift($db, substr($path, 14));
 else    { http_response_code(404); echo json_encode(['error' => 'Rota não encontrada.']); }
 
 
@@ -1259,4 +1273,210 @@ function handle_admin_delete_prize(PDO $db, string $prize_id): void
     }
 
     echo json_encode(['ok' => true]);
+}
+
+
+// ═══ HANDLERS — Admin: Editor de Site ════════════════════════════════════════
+
+/**
+ * GET /admin/site
+ */
+function handle_admin_get_site(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    $c = $db->prepare(
+        'SELECT couple_display_name, home_name, name_partner_1, name_partner_2,
+                wedding_date, wedding_time, wedding_location, pix_key,
+                site_intro_title, site_intro_subtitle, rooms_config
+           FROM couples WHERE id = ? LIMIT 1'
+    );
+    $c->execute([$couple_id]);
+    $row = $c->fetch();
+
+    $gs = $db->prepare(
+        'SELECT id, slug, title, subtitle, description,
+                CAST(suggested_amount AS CHAR) AS suggested_amount,
+                tag, tag_color, emoji_name, display_order, active
+           FROM gift_items WHERE couple_id = ? ORDER BY display_order ASC'
+    );
+    $gs->execute([$couple_id]);
+
+    echo json_encode([
+        'couple' => [
+            'display_name'     => $row['couple_display_name'] ?? '',
+            'home_name'        => $row['home_name']           ?? '',
+            'partner1'         => $row['name_partner_1'],
+            'partner2'         => $row['name_partner_2'],
+            'wedding_date'     => $row['wedding_date'],
+            'wedding_time'     => $row['wedding_time'],
+            'wedding_location' => $row['wedding_location']    ?? '',
+            'pix_key'          => $row['pix_key']             ?? '',
+        ],
+        'content' => [
+            'intro_title'    => $row['site_intro_title']    ?? '',
+            'intro_subtitle' => $row['site_intro_subtitle'] ?? '',
+        ],
+        'rooms' => json_decode($row['rooms_config'] ?? '{}', true) ?: [],
+        'gifts' => array_map(static fn($g) => [
+            'id'               => $g['id'],
+            'slug'             => $g['slug'],
+            'title'            => $g['title'],
+            'subtitle'         => $g['subtitle']         ?? '',
+            'description'      => $g['description']      ?? '',
+            'suggested_amount' => $g['suggested_amount'] !== null ? (float) $g['suggested_amount'] : null,
+            'tag'              => $g['tag']              ?? '',
+            'tag_color'        => $g['tag_color']        ?? '',
+            'emoji_name'       => $g['emoji_name']       ?? 'gift',
+            'display_order'    => (int) $g['display_order'],
+            'active'           => (bool) $g['active'],
+        ], $gs->fetchAll()),
+    ]);
+}
+
+function handle_admin_save_couple(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    $b = json_input();
+
+    $wedding_date = $b['wedding_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $wedding_date)) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Data inválida (use YYYY-MM-DD).']);
+        return;
+    }
+
+    $db->prepare(
+        'UPDATE couples
+            SET couple_display_name=?, home_name=?,
+                name_partner_1=?, name_partner_2=?,
+                wedding_date=?, wedding_time=?,
+                wedding_location=?, pix_key=?
+          WHERE id=?'
+    )->execute([
+        substr(strip_tags($b['display_name']     ?? ''), 0, 255),
+        substr(strip_tags($b['home_name']        ?? ''), 0, 100),
+        substr(strip_tags($b['partner1']         ?? ''), 0, 255),
+        substr(strip_tags($b['partner2']         ?? ''), 0, 255),
+        $wedding_date,
+        substr(preg_replace('/[^0-9:]/', '', $b['wedding_time'] ?? ''), 0, 5),
+        substr(strip_tags($b['wedding_location'] ?? ''), 0, 255),
+        substr(strip_tags($b['pix_key']          ?? ''), 0, 255) ?: null,
+        $couple_id,
+    ]);
+
+    echo json_encode(['ok' => true]);
+}
+
+function handle_admin_save_content(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    $b = json_input();
+
+    $db->prepare(
+        'UPDATE couples SET site_intro_title=?, site_intro_subtitle=? WHERE id=?'
+    )->execute([
+        substr(strip_tags($b['intro_title']    ?? ''), 0, 255),
+        substr(strip_tags($b['intro_subtitle'] ?? ''), 0, 2000),
+        $couple_id,
+    ]);
+
+    echo json_encode(['ok' => true]);
+}
+
+function handle_admin_save_rooms(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    $rooms_raw = (json_input())['rooms'] ?? [];
+    $clean = [];
+
+    foreach (['entrada', 'sala', 'escritorio', 'varanda'] as $key) {
+        if (!isset($rooms_raw[$key])) continue;
+        $r = $rooms_raw[$key];
+        $entry = [
+            'title' => substr(strip_tags($r['title'] ?? ''), 0, 255),
+            'desc'  => substr(strip_tags($r['desc']  ?? ''), 0, 2000),
+        ];
+        if (!empty($r['nextText'])) {
+            $entry['nextText'] = substr(strip_tags($r['nextText']), 0, 100);
+        }
+        $clean[$key] = $entry;
+    }
+
+    $db->prepare('UPDATE couples SET rooms_config=? WHERE id=?')
+       ->execute([json_encode($clean, JSON_UNESCAPED_UNICODE), $couple_id]);
+
+    echo json_encode(['ok' => true]);
+}
+
+function handle_admin_add_gift(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    [$id, $err] = admin_gift_upsert($db, $couple_id, null, json_input());
+    if ($err) { http_response_code(422); echo json_encode(['error' => $err]); return; }
+    http_response_code(201);
+    echo json_encode(['ok' => true, 'id' => $id]);
+}
+
+function handle_admin_update_gift(PDO $db, string $gift_id): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    [, $err] = admin_gift_upsert($db, $couple_id, $gift_id, json_input());
+    if ($err) { http_response_code(422); echo json_encode(['error' => $err]); return; }
+    echo json_encode(['ok' => true]);
+}
+
+function handle_admin_delete_gift(PDO $db, string $gift_id): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    $stmt = $db->prepare('UPDATE gift_items SET active=0 WHERE id=? AND couple_id=?');
+    $stmt->execute([$gift_id, $couple_id]);
+    if ($stmt->rowCount() === 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Presente não encontrado.']);
+        return;
+    }
+    echo json_encode(['ok' => true]);
+}
+
+function admin_gift_upsert(PDO $db, string $couple_id, ?string $gift_id, array $b): array
+{
+    $slug  = substr(preg_replace('/[^a-z0-9\-]/', '', strtolower($b['slug']  ?? '')), 0, 50);
+    $title = substr(strip_tags($b['title'] ?? ''), 0, 255);
+    if (empty($slug) || empty($title)) return [null, 'Slug e título são obrigatórios.'];
+
+    $amount = (isset($b['suggested_amount']) && $b['suggested_amount'] !== null && $b['suggested_amount'] !== '')
+              ? (float) $b['suggested_amount'] : null;
+
+    $row = [
+        substr(strip_tags($b['subtitle']    ?? ''), 0, 255),
+        substr(strip_tags($b['description'] ?? ''), 0, 5000),
+        $amount,
+        substr(strip_tags($b['tag']        ?? ''), 0, 100),
+        substr(strip_tags($b['tag_color']  ?? ''), 0, 100),
+        substr(strip_tags($b['emoji_name'] ?? 'gift'), 0, 50),
+        (int) ($b['display_order'] ?? 0),
+        isset($b['active']) ? (int) $b['active'] : 1,
+    ];
+
+    if ($gift_id === null) {
+        $gift_id = generate_uuid();
+        $db->prepare(
+            'INSERT INTO gift_items
+               (id, couple_id, slug, title, subtitle, description, suggested_amount,
+                tag, tag_color, emoji_name, display_order, active)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        )->execute(array_merge([$gift_id, $couple_id, $slug, $title], $row));
+    } else {
+        $stmt = $db->prepare(
+            'UPDATE gift_items
+                SET slug=?,title=?,subtitle=?,description=?,suggested_amount=?,
+                    tag=?,tag_color=?,emoji_name=?,display_order=?,active=?
+              WHERE id=? AND couple_id=?'
+        );
+        $stmt->execute(array_merge([$slug, $title], $row, [$gift_id, $couple_id]));
+        if ($stmt->rowCount() === 0) return [null, 'Presente não encontrado.'];
+    }
+
+    return [$gift_id, null];
 }
