@@ -935,6 +935,9 @@ function handle_rifa_pay_card(PDO $db): void
     if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
 
+    // Log temporário — remover após diagnóstico
+    error_log('[MP-DEBUG] token=' . substr($token, 0, 20) . ' method=' . $payment_method_id . ' issuer=' . ($issuer_id ?? 'null') . ' amount=' . $total_amount . ' email=' . $payer_email);
+
     try {
         $res        = mp_request('POST', '/v1/payments', $payload, "{$group_id}-card");
         $mp_status  = $res['status'] ?? 'unknown';
