@@ -53,6 +53,14 @@ function fmtDate(iso: string) {
   });
 }
 
+// Taxas MP conforme tabela de tarifas vigente
+// Crédito: 3,03% à vista · 3,60% 2-12x (sem parcelas salvas, usamos 3,60% como estimativa)
+const MP_FEE: Record<string, number> = { pix: 0, credit_card: 0.036 };
+function netValue(amount: number, method: string | null) {
+  const fee = MP_FEE[method ?? ''] ?? 0.036;
+  return amount * (1 - fee);
+}
+
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
 const inputCls = 'w-full px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white text-sm text-stone-900 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8FA9B8]/40 focus:border-[#8FA9B8] transition-all';
@@ -615,12 +623,16 @@ const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () 
   const { sold, pending, stats } = data.tickets;
   const soldPct = Math.min(100, (stats.sold / Math.max(cfg.total_tickets, 1)) * 100);
   const drawTarget = Math.ceil(cfg.total_tickets * cfg.draw_threshold_pct);
+  const totalNet = useMemo(
+    () => sold.reduce((acc, t) => acc + netValue(t.amount, t.payment_method), 0),
+    [sold],
+  );
 
   return (
     <div className="space-y-5">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Vendidos"    value={stats.sold}      icon={<CheckCircle2 size={26} />} accent="border-[#94A684]" sub={`R$ ${fmt(stats.sold * cfg.ticket_price)}`} />
+        <StatCard label="Vendidos"    value={stats.sold}      icon={<CheckCircle2 size={26} />} accent="border-[#94A684]" sub={`R$ ${fmt(totalNet)} líquido`} />
         <StatCard label="Reservados"  value={stats.pending}   icon={<Ticket size={26} />}        accent="border-[#D6BC9D]" />
         <StatCard label="Disponíveis" value={stats.available} icon={<Gift size={26} />}           accent="border-[#8FA9B8]" sub={`de ${cfg.total_tickets} total`} />
       </div>
@@ -764,16 +776,35 @@ const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () 
                 {[...sold, ...pending].sort((a, b) => a.ticket_number - b.ticket_number).map((t) => (
                   <div key={t.id} className="flex items-center justify-between gap-3 px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-black text-stone-900 w-10 text-center bg-stone-100 rounded-lg py-1">
+                      <span className="text-xs font-black text-stone-900 w-10 text-center bg-stone-100 rounded-lg py-1 flex-shrink-0">
                         #{t.ticket_number}
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-stone-900">{t.buyer_name ?? '—'}</p>
                         <p className="text-xs text-stone-400">{t.buyer_email}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {t.payment_method && (
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
+                              t.payment_method === 'pix'
+                                ? 'bg-[#94A684]/15 text-[#5a7a4e]'
+                                : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {t.payment_method === 'pix' ? 'Pix' : 'Cartão'}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-stone-400">{fmtDate(t.created_at)}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5 flex-shrink-0">
-                      <span className="text-xs font-bold text-stone-500">R$ {fmt(t.amount)}</span>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-stone-700">R$ {fmt(t.amount)}</p>
+                        {t.payment_status === 'approved' && (
+                          <p className="text-[10px] text-stone-400" title={t.payment_method === 'pix' ? 'Pix: 0% de taxa' : 'Cartão: estimativa com taxa de 3,60%'}>
+                            liq. R$ {fmt(netValue(t.amount, t.payment_method))}
+                          </p>
+                        )}
+                      </div>
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
                         t.payment_status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                       }`}>

@@ -1218,7 +1218,7 @@ function handle_admin_get_rifa(PDO $db): void
     // Bilhetes
     $tickets_stmt = $db->prepare(
         "SELECT id, ticket_number, buyer_name, buyer_email, buyer_phone,
-                payment_status, amount, created_at
+                payment_method, payment_status, amount, created_at
            FROM raffle_tickets
           WHERE couple_id = ? AND payment_status IN ('approved','pending')
           ORDER BY ticket_number ASC"
@@ -1235,6 +1235,7 @@ function handle_admin_get_rifa(PDO $db): void
             'buyer_name'     => $t['buyer_name'],
             'buyer_email'    => $t['buyer_email'],
             'buyer_phone'    => $t['buyer_phone'],
+            'payment_method' => $t['payment_method'],
             'payment_status' => $t['payment_status'],
             'amount'         => (float) $t['amount'],
             'created_at'     => $t['created_at'],
