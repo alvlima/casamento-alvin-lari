@@ -893,7 +893,8 @@ function handle_rifa_pay_card(PDO $db): void
         $description = "{$count} Bilhetes (#$nums) — Rifa Chá de Casa Nova";
     }
 
-    $unit_price = $count > 0 ? round($total_amount / $count, 2) : $total_amount;
+    $unit_price  = $count > 0 ? round($total_amount / $count, 2) : $total_amount;
+    $name_parts  = explode(' ', trim($name), 2);
     $payload = [
         'transaction_amount'   => $total_amount,
         'token'                => $token,
@@ -901,9 +902,11 @@ function handle_rifa_pay_card(PDO $db): void
         'installments'         => $installments,
         'payment_method_id'    => $payment_method_id,
         'statement_descriptor' => 'ALVIN E LARI',
+        'binary_mode'          => true,   // decisão imediata: approved ou rejected, sem in_process
         'payer'                => [
             'email'      => $payer_email,
-            'first_name' => explode(' ', trim($name))[0],
+            'first_name' => $name_parts[0],
+            'last_name'  => $name_parts[1] ?? $name_parts[0],
         ],
         'external_reference'   => $external_ref,
         'notification_url'     => MP_WEBHOOK_URL,
@@ -994,6 +997,7 @@ function handle_gifts_pay_card(PDO $db): void
     )->execute([$contribution_id, $couple_id, $gift_item_id, $gift_title, $amount, $name, $payer_email]);
 
     $gift_description = "Presente: {$gift_title}";
+    $gift_name_parts  = $name ? explode(' ', trim($name), 2) : ['Anônimo'];
     $payload = [
         'transaction_amount'   => round($amount, 2),
         'token'                => $token,
@@ -1001,9 +1005,11 @@ function handle_gifts_pay_card(PDO $db): void
         'installments'         => $installments,
         'payment_method_id'    => $payment_method_id,
         'statement_descriptor' => 'ALVIN E LARI',
+        'binary_mode'          => true,
         'payer'                => [
             'email'      => $payer_email,
-            'first_name' => $name ? explode(' ', trim($name))[0] : null,
+            'first_name' => $gift_name_parts[0],
+            'last_name'  => $gift_name_parts[1] ?? $gift_name_parts[0],
         ],
         'external_reference'   => $external_ref,
         'notification_url'     => MP_WEBHOOK_URL,
