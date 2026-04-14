@@ -218,7 +218,7 @@ function get_authenticated_couple_id(PDO $db): string
 
 function json_input(): array
 {
-    return json_decode(file_get_contents('php://input'), true) ?: [];
+    return json_decode(file_get_contents('php://input'), true, 512, JSON_BIGINT_AS_STRING) ?: [];
 }
 
 function generate_uuid(): string
@@ -330,7 +330,7 @@ function mp_request(string $method, string $path, array $data = [], string $idem
     if (!$body || $status >= 500) {
         throw new RuntimeException("Mercado Pago indisponível (HTTP {$status}).");
     }
-    return json_decode($body, true) ?: [];
+    return json_decode($body, true, 512, JSON_BIGINT_AS_STRING) ?: [];
 }
 
 /**
@@ -356,7 +356,9 @@ function verify_mp_signature(): bool
     }
     $x_sig    = $_SERVER['HTTP_X_SIGNATURE'] ?? '';
     $x_req_id = $_SERVER['HTTP_X_REQUEST_ID'] ?? '';
-    $data_id  = $_GET['data.id'] ?? '';
+    // PHP converte 'data.id' para 'data_id' em $_GET — precisa parsear QUERY_STRING direto
+    preg_match('/(?:^|&)data\.id=([^&]*)/', $_SERVER['QUERY_STRING'] ?? '', $m);
+    $data_id  = isset($m[1]) ? urldecode($m[1]) : '';
     if (!$x_sig || !$data_id) {
         return false;
     }
