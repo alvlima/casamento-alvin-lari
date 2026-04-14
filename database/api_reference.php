@@ -507,31 +507,36 @@ function handle_rifa_tickets(PDO $db): void
 
 /**
  * POST /api/rifa/reserve
- * Body: { ticket_number, buyer_name, buyer_email, buyer_phone?, payment_method, couple }
- * Reserva o bilhete e cria o pagamento no Mercado Pago.
+ * Body: { ticket_numbers: int[], buyer_name, buyer_email, buyer_phone?, payment_method, couple }
+ * Reserva um ou mais bilhetes e cria o pagamento no Mercado Pago.
  */
 function handle_rifa_reserve(PDO $db): void
 {
     $body = json_input();
 
     $couple_id = resolve_couple_by_slug($db, $body['couple'] ?? '');
-    $ticket    = (int) ($body['ticket_number'] ?? 0);
     $name      = substr(trim(strip_tags($body['buyer_name']  ?? '')), 0, 255);
     $email     = filter_var($body['buyer_email'] ?? '', FILTER_VALIDATE_EMAIL);
     $phone     = substr(trim(strip_tags($body['buyer_phone'] ?? '')), 0, 50);
     $method    = in_array($body['payment_method'] ?? '', ['pix', 'credit_card'], true)
                  ? $body['payment_method'] : null;
 
-    if ($ticket < 1 || !$name || !$email || !$method) {
+    // Suporta ticket_numbers (array) ou ticket_number (legado)
+    $raw     = $body['ticket_numbers'] ?? ($body['ticket_number'] ? [$body['ticket_number']] : []);
+    $tickets = array_values(array_unique(array_filter(array_map('intval', (array) $raw))));
+    $count   = count($tickets);
+
+    if ($count < 1 || $count > 10 || !$name || !$email || !$method) {
         http_response_code(422);
-        echo json_encode(['error' => 'Dados inválidos. Verifique nome, e-mail e número do bilhete.']);
+        echo json_encode(['error' => 'Dados inválidos. Selecione entre 1 e 10 bilhetes e preencha nome e e-mail.']);
         return;
     }
 
     // Preço lido do banco — nunca hardcoded
     $price_row = $db->prepare('SELECT raffle_ticket_price FROM couples WHERE id = ? LIMIT 1');
     $price_row->execute([$couple_id]);
-    $amount = (float) ($price_row->fetchColumn() ?: 18.00);
+    $unit_price   = (float) ($price_row->fetchColumn() ?: 18.00);
+    $total_amount = $unit_price * $count;
 
     // ── Reserva atômica via transação ──────────────────────────────────────────
     $db->beginTransaction();
@@ -540,57 +545,73 @@ function handle_rifa_reserve(PDO $db): void
         $db->prepare("DELETE FROM raffle_tickets WHERE payment_status = 'pending' AND expires_at < NOW()")
            ->execute();
 
-        // Verifica se o bilhete está disponível
+        // Verifica se algum bilhete está tomado
+        $placeholders = implode(',', array_fill(0, $count, '?'));
         $chk = $db->prepare(
-            "SELECT id FROM raffle_tickets
-              WHERE couple_id = ? AND ticket_number = ?
-                AND payment_status IN ('approved','pending')
-              LIMIT 1"
+            "SELECT ticket_number FROM raffle_tickets
+              WHERE couple_id = ? AND ticket_number IN ({$placeholders})
+                AND payment_status IN ('approved','pending')"
         );
-        $chk->execute([$couple_id, $ticket]);
-        if ($chk->fetch()) {
+        $chk->execute([$couple_id, ...$tickets]);
+        $taken = $chk->fetchAll(PDO::FETCH_COLUMN);
+        if ($taken) {
             $db->rollBack();
             http_response_code(409);
-            echo json_encode(['error' => 'Este bilhete acabou de ser reservado. Escolha outro número.']);
+            echo json_encode([
+                'error' => 'Bilhetes já reservados: #' . implode(', #', array_map(fn($n) => str_pad($n, 3, '0', STR_PAD_LEFT), $taken)) . '. Remova-os e tente novamente.',
+                'taken' => array_map('intval', $taken),
+            ]);
             return;
         }
 
-        // Insere reserva pendente (expira em 30 minutos)
-        $ticket_id    = generate_uuid();
-        $external_ref = "rifa-{$ticket_id}";
-
-        $db->prepare(
+        // Insere uma linha por bilhete (expiram em 30 minutos)
+        $group_id  = generate_uuid();
+        $ticket_ids = [];
+        $insert = $db->prepare(
             "INSERT INTO raffle_tickets
                (id, couple_id, ticket_number, buyer_name, buyer_email, buyer_phone,
                 payment_method, payment_status, amount, expires_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?,
                      DATE_ADD(NOW(), INTERVAL 30 MINUTE))"
-        )->execute([$ticket_id, $couple_id, $ticket, $name, $email, $phone ?: null, $method, $amount]);
+        );
+        foreach ($tickets as $t) {
+            $tid = generate_uuid();
+            $ticket_ids[] = $tid;
+            $insert->execute([$tid, $couple_id, $t, $name, $email, $phone ?: null, $method, $unit_price]);
+        }
 
         $db->commit();
     } catch (Exception $e) {
         $db->rollBack();
         http_response_code(500);
-        echo json_encode(['error' => 'Erro ao reservar bilhete. Tente novamente.']);
+        echo json_encode(['error' => 'Erro ao reservar bilhetes. Tente novamente.']);
         return;
     }
 
     // ── Cria pagamento no Mercado Pago (fora da transação) ────────────────────
-    $description = sprintf("Bilhete #%03d — Rifa Chá de Casa Nova", $ticket);
+    $external_ref = "rifa-group-{$group_id}";
+    if ($count === 1) {
+        $description = sprintf("Bilhete #%03d — Rifa Chá de Casa Nova", $tickets[0]);
+    } else {
+        $nums = implode(', #', array_map(fn($n) => str_pad($n, 3, '0', STR_PAD_LEFT), $tickets));
+        $description = "{$count} Bilhetes (#$nums) — Rifa Chá de Casa Nova";
+    }
 
     try {
         if ($method === 'pix') {
-            $pix = mp_create_pix($amount, $description, $email, $name, $external_ref);
+            $pix = mp_create_pix($total_amount, $description, $email, $name, $external_ref);
 
-            $db->prepare('UPDATE raffle_tickets SET mp_payment_id = ? WHERE id = ?')
-               ->execute([$pix['id'], $ticket_id]);
+            // Associa todos os bilhetes ao mesmo mp_payment_id
+            $id_list = implode(',', array_fill(0, count($ticket_ids), '?'));
+            $db->prepare("UPDATE raffle_tickets SET mp_payment_id = ? WHERE id IN ({$id_list})")
+               ->execute([$pix['id'], ...$ticket_ids]);
 
             http_response_code(201);
             echo json_encode([
                 'method' => 'pix',
                 'data'   => [
                     'payment_id'     => $pix['id'],
-                    'ticket_id'      => $ticket_id,
+                    'ticket_ids'     => $ticket_ids,
                     'qr_code'        => $pix['qr_code'],
                     'qr_code_base64' => $pix['qr_code_base64'],
                 ],
@@ -601,25 +622,27 @@ function handle_rifa_reserve(PDO $db): void
                 'failure' => SITE_URL . '/rifa?payment=failure',
                 'pending' => SITE_URL . '/rifa?payment=pending&ref=' . urlencode($external_ref),
             ];
-            $pref = mp_create_preference($amount, $description, $email, $external_ref, $back_urls);
+            $pref = mp_create_preference($total_amount, $description, $email, $external_ref, $back_urls);
 
-            $db->prepare('UPDATE raffle_tickets SET mp_preference_id = ? WHERE id = ?')
-               ->execute([$pref['preference_id'], $ticket_id]);
+            $id_list = implode(',', array_fill(0, count($ticket_ids), '?'));
+            $db->prepare("UPDATE raffle_tickets SET mp_preference_id = ? WHERE id IN ({$id_list})")
+               ->execute([$pref['preference_id'], ...$ticket_ids]);
 
             http_response_code(201);
             echo json_encode([
                 'method' => 'credit_card',
                 'data'   => [
                     'preference_id' => $pref['preference_id'],
-                    'ticket_id'     => $ticket_id,
+                    'ticket_ids'    => $ticket_ids,
                     'init_point'    => $pref['init_point'],
                 ],
             ]);
         }
     } catch (RuntimeException $e) {
-        // MP falhou — cancela a reserva para liberar o número
-        $db->prepare("UPDATE raffle_tickets SET payment_status = 'cancelled' WHERE id = ?")
-           ->execute([$ticket_id]);
+        // MP falhou — cancela todas as reservas para liberar os números
+        $id_list = implode(',', array_fill(0, count($ticket_ids), '?'));
+        $db->prepare("UPDATE raffle_tickets SET payment_status = 'cancelled' WHERE id IN ({$id_list})")
+           ->execute($ticket_ids);
         http_response_code(502);
         echo json_encode(['error' => 'Falha ao conectar com Mercado Pago. Tente novamente.']);
     }
@@ -746,7 +769,14 @@ function handle_mp_webhook(PDO $db): void
         $new_status   = map_mp_status($mp_status);
         $external_ref = $payment['external_reference'] ?? '';
 
-        if (str_starts_with($external_ref, 'rifa-')) {
+        if (str_starts_with($external_ref, 'rifa-group-')) {
+            // Multi-bilhete: atualiza todos os rows pelo mp_payment_id
+            $db->prepare(
+                "UPDATE raffle_tickets SET payment_status = ?, updated_at = NOW() WHERE mp_payment_id = ?"
+            )->execute([$new_status, $payment_id]);
+
+        } elseif (str_starts_with($external_ref, 'rifa-')) {
+            // Legado (bilhete único): external_ref = "rifa-{ticket_id}"
             $ticket_id = substr($external_ref, 5);
             $db->prepare(
                 "UPDATE raffle_tickets SET payment_status = ?, mp_payment_id = ?, updated_at = NOW() WHERE id = ?"
@@ -772,16 +802,15 @@ function handle_mp_webhook(PDO $db): void
 
 /**
  * POST /api/rifa/pay-card
- * Checkout Transparente: recebe token MP do Brick, cria pagamento sincrono.
- * Body: { token, payment_method_id, installments, issuer_id?, transaction_amount,
- *         payer: { email, identification? }, ticket_number, buyer_name, couple }
+ * Checkout Transparente: recebe token MP do Brick, cria pagamento síncrono.
+ * Body: { token, payment_method_id, installments, issuer_id?,
+ *         payer: { email, identification? }, ticket_numbers: int[], buyer_name, couple }
  */
 function handle_rifa_pay_card(PDO $db): void
 {
     $body = json_input();
 
     $couple_id         = resolve_couple_by_slug($db, $body['couple'] ?? '');
-    $ticket            = (int) ($body['ticket_number'] ?? 0);
     $name              = substr(trim(strip_tags($body['buyer_name'] ?? '')), 0, 255);
     $token             = $body['token'] ?? '';
     $payment_method_id = $body['payment_method_id'] ?? '';
@@ -790,7 +819,12 @@ function handle_rifa_pay_card(PDO $db): void
     $payer_email       = filter_var($body['payer']['email'] ?? '', FILTER_VALIDATE_EMAIL);
     $payer_ident       = $body['payer']['identification'] ?? null;
 
-    if ($ticket < 1 || !$name || !$token || !$payment_method_id || !$payer_email) {
+    // Suporta ticket_numbers (array) ou ticket_number (legado)
+    $raw     = $body['ticket_numbers'] ?? ($body['ticket_number'] ? [$body['ticket_number']] : []);
+    $tickets = array_values(array_unique(array_filter(array_map('intval', (array) $raw))));
+    $count   = count($tickets);
+
+    if ($count < 1 || $count > 10 || !$name || !$token || !$payment_method_id || !$payer_email) {
         http_response_code(422);
         echo json_encode(['error' => 'Dados inválidos.']);
         return;
@@ -799,50 +833,68 @@ function handle_rifa_pay_card(PDO $db): void
     // Preço lido do banco — nunca hardcoded
     $price_row = $db->prepare('SELECT raffle_ticket_price FROM couples WHERE id = ? LIMIT 1');
     $price_row->execute([$couple_id]);
-    $amount = (float) ($price_row->fetchColumn() ?: 18.00);
+    $unit_price   = (float) ($price_row->fetchColumn() ?: 18.00);
+    $total_amount = $unit_price * $count;
 
-    // Reserva atômica
+    // Reserva atômica de todos os bilhetes
     $db->beginTransaction();
     try {
         $db->prepare("DELETE FROM raffle_tickets WHERE payment_status = 'pending' AND expires_at < NOW()")->execute();
 
+        $placeholders = implode(',', array_fill(0, $count, '?'));
         $chk = $db->prepare(
-            "SELECT id FROM raffle_tickets
-              WHERE couple_id = ? AND ticket_number = ?
-                AND payment_status IN ('approved','pending') LIMIT 1"
+            "SELECT ticket_number FROM raffle_tickets
+              WHERE couple_id = ? AND ticket_number IN ({$placeholders})
+                AND payment_status IN ('approved','pending')"
         );
-        $chk->execute([$couple_id, $ticket]);
-        if ($chk->fetch()) {
+        $chk->execute([$couple_id, ...$tickets]);
+        $taken = $chk->fetchAll(PDO::FETCH_COLUMN);
+        if ($taken) {
             $db->rollBack();
             http_response_code(409);
-            echo json_encode(['error' => 'Bilhete reservado enquanto você preenchia. Escolha outro número.']);
+            echo json_encode([
+                'error' => 'Bilhetes já reservados: #' . implode(', #', array_map(fn($n) => str_pad($n, 3, '0', STR_PAD_LEFT), $taken)) . '. Remova-os e tente novamente.',
+                'taken' => array_map('intval', $taken),
+            ]);
             return;
         }
 
-        $ticket_id    = generate_uuid();
-        $external_ref = "rifa-{$ticket_id}";
-
-        $db->prepare(
+        $group_id   = generate_uuid();
+        $ticket_ids = [];
+        $insert = $db->prepare(
             "INSERT INTO raffle_tickets
                (id, couple_id, ticket_number, buyer_name, buyer_email,
                 payment_method, payment_status, amount, expires_at)
              VALUES (?, ?, ?, ?, ?, 'credit_card', 'pending', ?,
                      DATE_ADD(NOW(), INTERVAL 15 MINUTE))"
-        )->execute([$ticket_id, $couple_id, $ticket, $name, $payer_email, $amount]);
+        );
+        foreach ($tickets as $t) {
+            $tid = generate_uuid();
+            $ticket_ids[] = $tid;
+            $insert->execute([$tid, $couple_id, $t, $name, $payer_email, $unit_price]);
+        }
 
         $db->commit();
     } catch (\Exception $e) {
         $db->rollBack();
         http_response_code(500);
-        echo json_encode(['error' => 'Erro ao reservar bilhete.']);
+        echo json_encode(['error' => 'Erro ao reservar bilhetes.']);
         return;
     }
 
     // Chama MP com o token do Brick
+    $external_ref = "rifa-group-{$group_id}";
+    if ($count === 1) {
+        $description = sprintf("Bilhete #%03d — Rifa Chá de Casa Nova", $tickets[0]);
+    } else {
+        $nums = implode(', #', array_map(fn($n) => str_pad($n, 3, '0', STR_PAD_LEFT), $tickets));
+        $description = "{$count} Bilhetes (#$nums) — Rifa Chá de Casa Nova";
+    }
+
     $payload = [
-        'transaction_amount' => $amount,
+        'transaction_amount' => $total_amount,
         'token'              => $token,
-        'description'        => sprintf("Bilhete #%03d — Rifa Chá de Casa Nova", $ticket),
+        'description'        => $description,
         'installments'       => $installments,
         'payment_method_id'  => $payment_method_id,
         'payer'              => ['email' => $payer_email],
@@ -850,33 +902,37 @@ function handle_rifa_pay_card(PDO $db): void
         'notification_url'   => MP_WEBHOOK_URL,
         'capture'            => true,
     ];
-    if ($issuer_id)  $payload['issuer_id']               = (int) $issuer_id;
+    if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
 
     try {
-        $res        = mp_request('POST', '/v1/payments', $payload, "{$ticket_id}-card");
+        $res        = mp_request('POST', '/v1/payments', $payload, "{$group_id}-card");
         $mp_status  = $res['status'] ?? 'unknown';
         $new_status = map_mp_status($mp_status);
         $mp_pay_id  = (string) ($res['id'] ?? '');
 
+        $id_list = implode(',', array_fill(0, count($ticket_ids), '?'));
         $db->prepare(
-            "UPDATE raffle_tickets SET payment_status = ?, mp_payment_id = ?, expires_at = NULL WHERE id = ?"
-        )->execute([$new_status, $mp_pay_id, $ticket_id]);
+            "UPDATE raffle_tickets SET payment_status = ?, mp_payment_id = ?, expires_at = NULL WHERE id IN ({$id_list})"
+        )->execute([$new_status, $mp_pay_id, ...$ticket_ids]);
 
         if ($new_status === 'rejected') {
             http_response_code(402);
             echo json_encode([
                 'error'  => mp_rejection_message($res['status_detail'] ?? ''),
                 'status' => 'rejected',
+                'detail' => $res['status_detail'] ?? 'unknown',
             ]);
             return;
         }
 
         http_response_code(201);
-        echo json_encode(['status' => $new_status, 'payment_id' => $mp_pay_id, 'ticket_id' => $ticket_id]);
+        echo json_encode(['status' => $new_status, 'payment_id' => $mp_pay_id, 'ticket_ids' => $ticket_ids]);
 
     } catch (\RuntimeException $e) {
-        $db->prepare("UPDATE raffle_tickets SET payment_status = 'cancelled' WHERE id = ?")->execute([$ticket_id]);
+        $id_list = implode(',', array_fill(0, count($ticket_ids), '?'));
+        $db->prepare("UPDATE raffle_tickets SET payment_status = 'cancelled' WHERE id IN ({$id_list})")
+           ->execute($ticket_ids);
         http_response_code(502);
         echo json_encode(['error' => 'Falha ao conectar com Mercado Pago.']);
     }
@@ -949,6 +1005,7 @@ function handle_gifts_pay_card(PDO $db): void
             echo json_encode([
                 'error'  => mp_rejection_message($res['status_detail'] ?? ''),
                 'status' => 'rejected',
+                'detail' => $res['status_detail'] ?? 'unknown',
             ]);
             return;
         }
