@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm_config_registry=https://registry.npmjs.org npm run build)",
+      "Bash(VITE_MP_PUBLIC_KEY=\"\" npm_config_registry=https://registry.npmjs.org node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\(process.env.VITE_MP_PUBLIC_KEY\\)\")",
+      "Bash(printenv VITE_MP_PUBLIC_KEY)",
+      "Bash(xxd)",
+      "Bash(rm -rf dist node_modules/.vite)",
+      "Bash(VITE_MP_PUBLIC_KEY=\"APP_USR-88f3f737-22fb-4cf7-bced-305939fd2983\" npm_config_registry=https://registry.npmjs.org npm run build)"
+    ]
+  }
+}
