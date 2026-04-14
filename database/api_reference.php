@@ -81,11 +81,10 @@
             $value = $m[2];
         }
         // putenv + $_ENV + $_SERVER para máxima compatibilidade
-        if (!array_key_exists($key, $_ENV)) {
-            putenv("{$key}={$value}");
-            $_ENV[$key]    = $value;
-            $_SERVER[$key] = $value;
-        }
+        // .env sempre tem prioridade — sobrescreve vars do sistema que possam estar vazias
+        putenv("{$key}={$value}");
+        $_ENV[$key]    = $value;
+        $_SERVER[$key] = $value;
     }
 })();
 
