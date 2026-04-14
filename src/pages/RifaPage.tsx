@@ -467,7 +467,9 @@ export default function RifaPage() {
   }, []);
 
   // Polling a cada 30s — reflete pagamentos confirmados via webhook do MP
+  // Pausa quando o modal está aberto para não reinicializar o Brick de cartão
   useEffect(() => {
+    if (modalOpen) return;
     const id = setInterval(() => {
       fetchRaffleTickets()
         .then(({ sold, pending }) => {
@@ -477,7 +479,7 @@ export default function RifaPage() {
         .catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [modalOpen]);
 
   const handleSelect = useCallback((n: number) => {
     setSelectedTickets((prev) => {
@@ -499,6 +501,13 @@ export default function RifaPage() {
   const dismissBanner = useCallback(() => {
     setSearchParams((p) => { p.delete('payment'); return p; });
   }, [setSearchParams]);
+
+  // Memoizado para não criar nova referência de array a cada render (evita
+  // reinicialização do CardPayment Brick quando o polling atualiza o estado)
+  const selectedNumbersSorted = useMemo(
+    () => [...selectedTickets].sort((a, b) => a - b),
+    [selectedTickets],
+  );
 
   const stats = useMemo(() => {
     const sold      = soldTickets.size;
@@ -690,7 +699,7 @@ export default function RifaPage() {
       <AnimatePresence>
         {modalOpen && selectedTickets.size > 0 && (
           <BuyModal
-            numbers={[...selectedTickets].sort((a, b) => a - b)}
+            numbers={selectedNumbersSorted}
             ticketPrice={ticketPrice}
             drawTarget={drawTarget}
             drawPct={stats.drawPct}
