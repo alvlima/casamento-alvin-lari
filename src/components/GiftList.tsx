@@ -367,7 +367,7 @@ export const GiftList = memo(({ onClose }: { onClose: () => void }) => {
         <div className="max-w-4xl mx-auto px-6 pt-4 pb-2 flex items-center gap-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aceita</p>
           <span className="flex items-center gap-1.5 bg-[#94A684]/10 text-[#94A684] text-xs font-black px-3 py-1.5 rounded-xl"><QrCode size={12}/>Pix</span>
-          <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-black px-3 py-1.5 rounded-xl"><CreditCard size={12}/>Cartão (sem redirecionar)</span>
+          <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-black px-3 py-1.5 rounded-xl"><CreditCard size={12}/>Cartão</span>
         </div>
 
         <div className="max-w-4xl mx-auto px-6 pt-4 pb-6 text-center">

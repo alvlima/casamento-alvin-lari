@@ -238,6 +238,96 @@ npm_config_registry=https://registry.npmjs.org npm install
 
 ---
 
+## Diretrizes de UI/UX
+
+### Tom e identidade visual
+
+O site é um **convite interativo estilo jogo de exploração**, não um site de casamento convencional. O tom é íntimo, poético e levemente místico — como caminhar pelos cômodos reais do apartamento do casal antes do altar.
+
+- **Voz:** calorosa, pessoal, com metáforas do lar (chaves, cômodos, rituais)
+- **Ritmo:** transições lentas e suaves (Framer Motion) reforçam a sensação de "estar no lugar"
+- **Evitar:** elementos genéricos de casamento (corações, rosas, confetes), CTAs agressivos, animações rápidas
+
+### Paleta e uso
+
+| Token          | Hex       | Onde usar                                             |
+|----------------|-----------|-------------------------------------------------------|
+| `sonhoAnjo`    | `#F2F1EC` | Background de toda a página — nunca branco puro       |
+| `damasco`      | `#E8C9B5` | Sala de estar, cards quentes, destaques principais    |
+| `carvalhoDian` | `#D6BC9D` | Bordas, separadores, botões secundários               |
+| `azulAstral`   | `#8FA9B8` | Escritório, badges informativos, links               |
+| `tomilhoSeco`  | `#94A684` | Varanda, badges de sucesso, acentos verdes            |
+
+Texto principal: `#3d3531` (marrom escuro) — nunca `#000000` puro.
+Texto secundário / labels: `#7a6f66` (marrom médio).
+
+### Tipografia
+
+- Fonte display (títulos de cômodo, intro): `font-serif` — peso leve, letra-espaçamento generoso
+- Corpo / UI: `font-sans` (Inter ou sistema) — sem serifa para leitura em tela
+- Tamanhos mínimos: 14px para labels, 16px para corpo, 20px+ para títulos de seção
+
+### Componentes e padrões visuais
+
+**Cards de cômodo**
+- Fundo colorido por cômodo (damasco / azulAstral / tomilhoSeco)
+- Cantos arredondados `rounded-2xl`, sombra suave `shadow-md`
+- Transição de entrada: `opacity 0→1` + `translateY 20px→0` com `ease-out 0.4s`
+
+**Botões**
+- Primário: fundo `damasco` ou `azulAstral`, texto escuro, `rounded-xl`, sem bordas
+- Secundário: borda `carvalhoDian`, fundo transparente
+- Destrutivo (delete): vermelho `rose-600` com ícone — sempre pedir confirmação antes de executar
+- Estados: `hover:brightness-95`, `active:scale-98`, `disabled:opacity-50`
+- Nunca usar `cursor-pointer` sem um handler real associado
+
+**Formulários (admin)**
+- Labels acima do campo, em `text-xs font-medium text-[#7a6f66] uppercase tracking-wide`
+- Inputs: `border border-stone-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#8FA9B8]`
+- Mensagens de erro: `text-rose-600 text-xs mt-1` abaixo do campo
+- SaveBar (salvar/cancelar): sempre fixada na parte inferior da seção editada
+
+**Modais e overlays**
+- Backdrop: `bg-black/40 backdrop-blur-sm`
+- Painel do modal: `bg-[#F2F1EC] rounded-2xl shadow-xl`
+- Fechar: ícone X no canto superior direito, ou clique no backdrop
+- Nunca usar `alert()` ou `confirm()` nativos — criar componentes inline
+
+**NavHUD (barra de progresso)**
+- Fixa no topo, fina (4px), cor da barra reflete o cômodo atual
+- Não exibir no painel admin
+
+### Layout e espaçamento
+
+- Máximo de conteúdo: `max-w-2xl mx-auto` para fluxo principal, `max-w-4xl` para o painel admin
+- Padding de seção: `px-4 py-6` mobile, `px-8 py-10` desktop
+- Gap entre elementos de formulário: `gap-4` (16px)
+- Gap entre seções do painel: `gap-8` (32px)
+
+### Responsividade
+
+- Mobile-first — o site é acessado principalmente por convidados no celular
+- Breakpoints usados: `sm` (640px) e `md` (768px) — raramente `lg`+
+- Grid de presentes: 1 coluna mobile, 2 colunas `sm:grid-cols-2`
+- Painel admin: sidebar de abas vira menu horizontal com scroll em mobile
+
+### Microinterações e feedback
+
+- **Loading states:** spinner `animate-spin` centralizado — nunca deixar o usuário sem feedback por mais de 300ms
+- **Sucesso:** mensagem verde inline (`text-emerald-600`) que some após 3s — não usar toast externo
+- **Erro:** mensagem vermelha inline persistente até nova ação do usuário
+- **Confirmação de ação destrutiva:** sempre mostrar um estado de confirmação inline ("Tem certeza? [Confirmar] [Cancelar]") antes de deletar
+- **Transições de cômodo:** Framer Motion `AnimatePresence` com `exit` animado — nunca troca instantânea
+
+### Acessibilidade mínima
+
+- Todo botão de ícone deve ter `aria-label` descritivo
+- Inputs devem ter `id` + `<label htmlFor>` associado
+- Contraste mínimo 4.5:1 para texto sobre fundo
+- Focus ring visível em todos os elementos interativos (`focus-visible:ring-2`)
+
+---
+
 ## Convenções de Código
 
 - Arquivos de componentes: PascalCase (`RoomView.tsx`)

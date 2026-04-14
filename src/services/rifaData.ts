@@ -3,7 +3,8 @@
  *
  * Endpoints PHP (HostGator):
  *   GET  /api/rifa/tickets?couple=alvin-lari  → lista vendidos/pendentes
- *   POST /api/rifa/reserve                    → reserva bilhete + cria pagamento MP
+ *   POST /api/rifa/reserve                    → reserva bilhetes + cria pagamento MP
+ *   POST /api/rifa/pay-card                   → checkout transparente com cartão
  *
  * Variável de ambiente: VITE_API_BASE_URL (ex: https://seudominio.com/api)
  * Sem a variável → usa mock local para desenvolvimento offline.
@@ -21,7 +22,7 @@ export interface TicketMap {
 }
 
 export interface BuyTicketInput {
-  ticket_number:  number;
+  ticket_numbers: number[];   // um ou mais bilhetes
   buyer_name:     string;
   buyer_email:    string;
   buyer_phone?:   string;
@@ -30,14 +31,14 @@ export interface BuyTicketInput {
 
 export interface PixResult {
   payment_id:     string;
-  ticket_id:      string;
+  ticket_ids:     string[];
   qr_code:        string;
   qr_code_base64: string;
 }
 
 export interface CardResult {
   preference_id: string;
-  ticket_id:     string;
+  ticket_ids:    string[];
   init_point:    string;
 }
 
@@ -60,14 +61,14 @@ export interface CardPaymentInput {
     email:           string;
     identification?: { type: string; number: string };
   };
-  ticket_number: number;
-  buyer_name:    string;
+  ticket_numbers: number[];   // um ou mais bilhetes
+  buyer_name:     string;
 }
 
 export interface CardPaymentResult {
-  status:     'approved' | 'pending' | 'rejected';
-  payment_id: string;
-  ticket_id:  string;
+  status:      'approved' | 'pending' | 'rejected';
+  payment_id:  string;
+  ticket_ids:  string[];
 }
 
 // ── Funções públicas ──────────────────────────────────────────────────────────
@@ -86,14 +87,15 @@ export async function fetchRaffleTickets(): Promise<TicketMap> {
 export async function buyRaffleTicket(input: BuyTicketInput): Promise<BuyTicketResult> {
   if (IS_MOCK) {
     await tick(700);
+    const ids = input.ticket_numbers.map(() => crypto.randomUUID());
     if (input.payment_method === 'pix') {
       return {
         method: 'pix',
         data: {
           payment_id:     'mock-pay-99999',
-          ticket_id:      crypto.randomUUID(),
+          ticket_ids:     ids,
           qr_code:        '00020126580014br.gov.bcb.pix0136MOCK-KEY-FOR-DEVELOPMENT-ONLY5204000053039865802BR5924LARISSA ALVARO CASAMENTO6009SAO PAULO62070503***6304ABCD',
-          qr_code_base64: '', // sem backend real, imagem fica vazia
+          qr_code_base64: '',
         },
       };
     }
@@ -101,7 +103,7 @@ export async function buyRaffleTicket(input: BuyTicketInput): Promise<BuyTicketR
       method: 'credit_card',
       data: {
         preference_id: 'mock-pref-id',
-        ticket_id:     crypto.randomUUID(),
+        ticket_ids:    ids,
         init_point:    'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=MOCK',
       },
     };
@@ -113,7 +115,10 @@ export async function buyRaffleTicket(input: BuyTicketInput): Promise<BuyTicketR
     body:    JSON.stringify({ ...input, couple: COUPLE }),
   });
 
-  if (res.status === 409) throw new Error('Este bilhete acabou de ser reservado. Escolha outro número.');
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({})) as { error?: string; taken?: number[] };
+    throw new Error(body.error ?? 'Bilhete(s) já reservado(s). Remova-os e tente novamente.');
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? 'Falha ao reservar bilhete. Tente novamente.');
@@ -124,15 +129,19 @@ export async function buyRaffleTicket(input: BuyTicketInput): Promise<BuyTicketR
 export async function processRifaCardPayment(input: CardPaymentInput): Promise<CardPaymentResult> {
   if (IS_MOCK) {
     await tick(900);
-    return { status: 'approved', payment_id: 'mock-card-99999', ticket_id: crypto.randomUUID() };
+    return {
+      status:     'approved',
+      payment_id: 'mock-card-99999',
+      ticket_ids: input.ticket_numbers.map(() => crypto.randomUUID()),
+    };
   }
   const res = await fetch(`${API}/rifa/pay-card`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ ...input, couple: COUPLE }),
   });
-  const body = await res.json().catch(() => ({})) as { error?: string; status?: string; payment_id?: string; ticket_id?: string };
-  if (res.status === 409) throw new Error('Bilhete reservado enquanto você preenchia. Escolha outro número.');
+  const body = await res.json().catch(() => ({})) as { error?: string; status?: string; payment_id?: string; ticket_ids?: string[]; detail?: string };
+  if (res.status === 409) throw new Error('Bilhete(s) reservado(s) enquanto você preenchia. Remova-os e tente novamente.');
   if (!res.ok) throw new Error(body.error ?? 'Pagamento recusado. Tente outro cartão.');
   return body as CardPaymentResult;
 }

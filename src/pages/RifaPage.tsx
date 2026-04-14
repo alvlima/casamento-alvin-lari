@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { CardPayment } from '@mercadopago/sdk-react';
 import {
   X, Copy, Check, Trophy, Ticket, Heart, PartyPopper,
-  Leaf, Sparkles, Zap, CreditCard, QrCode, AlertCircle,
+  Sparkles, Zap, CreditCard, QrCode, AlertCircle,
   Loader2, CheckCircle2,
 } from 'lucide-react';
 import {
@@ -22,7 +22,7 @@ import { ensureMPInitialized, IS_MP_READY } from '../lib/mercadopago';
 const PRIZE_VISUAL = [
   { place: '1º', icon: <Trophy size={22} className="text-yellow-500" />, bg: 'bg-yellow-50 border-yellow-200',       badge: 'bg-yellow-100 text-yellow-700'  },
   { place: '2º', icon: <Trophy size={22} className="text-[#8FA9B8]" />,  bg: 'bg-[#8FA9B8]/10 border-[#8FA9B8]/30', badge: 'bg-[#8FA9B8]/20 text-[#8FA9B8]' },
-  { place: '3º', icon: <Leaf   size={22} className="text-[#94A684]" />,  bg: 'bg-[#94A684]/10 border-[#94A684]/30', badge: 'bg-[#94A684]/20 text-[#94A684]' },
+  { place: '3º', icon: <Trophy   size={22} className="text-[#94A684]" />,  bg: 'bg-[#94A684]/10 border-[#94A684]/30', badge: 'bg-[#94A684]/20 text-[#94A684]' },
 ] as const;
 
 // ── Estilo customizado do Brick MP ────────────────────────────────────────────
@@ -40,7 +40,6 @@ const MP_BRICK_CUSTOMIZATION = {
         textSecondaryColor:      '#64748b',
         inputBackgroundColor:    '#f8fafc',
         formBackgroundColor:     '#ffffff',
-        inputFocusedBorderColor: '#94A684',
         borderRadiusFull:        '12px',
         borderRadiusMedium:      '8px',
       },
@@ -56,16 +55,16 @@ const MP_BRICK_CUSTOMIZATION = {
 type ModalStep = 'form' | 'pix_qr' | 'card_form' | 'card_done';
 
 interface BuyModalProps {
-  number:      number;
+  numbers:     number[];
   ticketPrice: number;
   drawTarget:  number;
   drawPct:     number;
   soldCount:   number;
   onClose:     () => void;
-  onReserved:  (n: number) => void;
+  onReserved:  (ns: number[]) => void;
 }
 
-const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, onClose, onReserved }: BuyModalProps) => {
+const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, onClose, onReserved }: BuyModalProps) => {
   const [step,    setStep]    = useState<ModalStep>('form');
   const [name,    setName]    = useState('');
   const [email,   setEmail]   = useState('');
@@ -75,8 +74,11 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
   const [copied,  setCopied]  = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
-  const remaining = Math.max(0, drawTarget - soldCount);
-  const drawReady = soldCount >= drawTarget;
+  const count      = numbers.length;
+  const total      = count * ticketPrice;
+  const remaining  = Math.max(0, drawTarget - soldCount);
+  const drawReady  = soldCount >= drawTarget;
+  const ticketList = numbers.map((n) => `#${String(n).padStart(3, '0')}`).join(' · ');
 
   const isFormValid =
     name.trim().length >= 2 &&
@@ -89,18 +91,18 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
     setError('');
     try {
       const result = await buyRaffleTicket({
-        ticket_number:  number,
+        ticket_numbers: numbers,
         buyer_name:     name.trim(),
         buyer_email:    email.trim(),
         buyer_phone:    phone.trim() || undefined,
         payment_method: 'pix',
       });
-      onReserved(number);
+      onReserved(numbers);
       if (result.method === 'pix') { setPixData(result.data); setStep('pix_qr'); }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro inesperado.');
     }
-  }, [isFormValid, number, name, email, phone, onReserved]);
+  }, [isFormValid, numbers, name, email, phone, onReserved]);
 
   const handleGoToCard = useCallback(() => {
     if (!isFormValid) return;
@@ -111,13 +113,16 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
 
   const handleCardSubmit = useCallback(async (formData: CardPaymentInput) => {
     try {
-      await processRifaCardPayment({ ...formData, ticket_number: number, buyer_name: name.trim() });
-      onReserved(number);
+      await processRifaCardPayment({ ...formData, ticket_numbers: numbers, buyer_name: name.trim() });
+      onReserved(numbers);
       setStep('card_done');
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Pagamento recusado.');
+      const msg = err instanceof Error ? err.message : 'Pagamento recusado. Tente outro cartão.';
+      setError(msg);
+      setStep('form');
+      throw new Error(msg);
     }
-  }, [number, name, onReserved]);
+  }, [numbers, name, onReserved]);
 
   const handleCopyCode = useCallback(() => {
     if (!pixData?.qr_code) return;
@@ -143,13 +148,20 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
             <X size={14} />
           </button>
           <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            {step === 'pix_qr'   ? <QrCode      size={28} className="text-white"       />
+            {step === 'pix_qr'     ? <QrCode      size={28} className="text-white"       />
             : step === 'card_done' ? <CheckCircle2 size={28} className="text-[#94A684]" />
             :                        <Ticket       size={28} className="text-white"       />}
           </div>
-          <p className="text-white/60 text-xs font-black uppercase tracking-widest mb-1">Bilhete</p>
-          <p className="text-5xl font-black text-white">#{String(number).padStart(3, '0')}</p>
-          <p className="text-white/60 text-sm mt-2 font-bold">R$ {ticketPrice},00</p>
+          <p className="text-white/60 text-xs font-black uppercase tracking-widest mb-1">
+            {count === 1 ? 'Bilhete' : `${count} Bilhetes`}
+          </p>
+          {count === 1
+            ? <p className="text-5xl font-black text-white">{ticketList}</p>
+            : <p className="text-base font-black text-white/90 leading-relaxed">{ticketList}</p>
+          }
+          <p className="text-white/60 text-sm mt-2 font-bold">
+            R$ {total},00{count > 1 && <span className="text-white/40 font-normal"> · R$ {ticketPrice} cada</span>}
+          </p>
         </div>
 
         <div className="p-6 space-y-4">
@@ -244,9 +256,9 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
               </div>
 
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1">
-                <p className="text-xs text-amber-700 font-bold">Valor exato: R$ {ticketPrice},00</p>
+                <p className="text-xs text-amber-700 font-bold">Valor exato: R$ {total},00</p>
                 <p className="text-xs text-amber-600">
-                  Bilhete #{String(number).padStart(3, '0')} reservado por <strong>30 minutos</strong>.
+                  {count === 1 ? `Bilhete ${ticketList}` : `${count} bilhetes (${ticketList})`} reservado{count > 1 ? 's' : ''} por <strong>30 minutos</strong>.
                   Confirmado automaticamente após o pagamento.
                 </p>
               </div>
@@ -270,7 +282,7 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
 
               {IS_MP_READY ? (
                 <CardPayment
-                  initialization={{ amount: ticketPrice, payer: { email: email.trim() } }}
+                  initialization={{ amount: total, payer: { email: email.trim() } }}
                   customization={MP_BRICK_CUSTOMIZATION}
                   onSubmit={handleCardSubmit as Parameters<typeof CardPayment>[0]['onSubmit']}
                   onError={(err) => { setError(String(err?.message ?? 'Erro no formulário de cartão.')); setStep('form'); }}
@@ -285,7 +297,7 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
                     </p>
                   </div>
                   <button
-                    onClick={() => handleCardSubmit({ token: 'mock-token', payment_method_id: 'visa', installments: 1, transaction_amount: ticketPrice, payer: { email: email.trim() }, ticket_number: number, buyer_name: name.trim() } as CardPaymentInput)}
+                    onClick={() => handleCardSubmit({ token: 'mock-token', payment_method_id: 'visa', installments: 1, transaction_amount: total, payer: { email: email.trim() }, ticket_numbers: numbers, buyer_name: name.trim() } as CardPaymentInput)}
                     className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-sm uppercase tracking-widest hover:bg-[#94A684] transition-all flex items-center justify-center gap-2">
                     <Loader2 size={14} />Simular Pagamento (Mock)
                   </button>
@@ -302,7 +314,12 @@ const BuyModal = memo(({ number, ticketPrice, drawTarget, drawPct, soldCount, on
               </motion.div>
               <div>
                 <p className="text-xl font-black text-slate-900">Pagamento aprovado!</p>
-                <p className="text-sm text-slate-500 mt-1">Bilhete <strong>#{String(number).padStart(3, '0')}</strong> confirmado no seu nome.</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  {count === 1
+                    ? <>Bilhete <strong>{ticketList}</strong> confirmado no seu nome.</>
+                    : <><strong>{count} bilhetes</strong> ({ticketList}) confirmados no seu nome.</>
+                  }
+                </p>
                 <p className="text-xs text-slate-400 mt-2">Comprovante enviado para <strong>{email}</strong></p>
               </div>
               <button onClick={onClose}
@@ -324,12 +341,13 @@ BuyModal.displayName = 'BuyModal';
 interface TicketGridProps {
   sold:         Set<number>;
   pending:      Set<number>;
+  selected:     Set<number>;
   loading:      boolean;
   totalTickets: number;
   onSelect:     (n: number) => void;
 }
 
-const TicketGrid = memo(({ sold, pending, loading, totalTickets, onSelect }: TicketGridProps) => {
+const TicketGrid = memo(({ sold, pending, selected, loading, totalTickets, onSelect }: TicketGridProps) => {
   if (loading) {
     return (
       <div className="grid grid-cols-10 gap-1.5">
@@ -342,19 +360,21 @@ const TicketGrid = memo(({ sold, pending, loading, totalTickets, onSelect }: Tic
   return (
     <div className="grid grid-cols-10 gap-1.5">
       {Array.from({ length: totalTickets }, (_, i) => i + 1).map((n) => {
-        const isSold      = sold.has(n);
-        const isPending   = !isSold && pending.has(n);
-        const isAvailable = !isSold && !isPending;
+        const isSold       = sold.has(n);
+        const isPending    = !isSold && pending.has(n);
+        const isSelected   = !isSold && !isPending && selected.has(n);
+        const isAvailable  = !isSold && !isPending;
         return (
           <motion.button key={n}
-            whileHover={isAvailable ? { scale: 1.15 } : {}}
+            whileHover={isAvailable ? { scale: 1.12 } : {}}
             whileTap={isAvailable   ? { scale: 0.95 } : {}}
             onClick={() => isAvailable && onSelect(n)}
             disabled={!isAvailable}
             title={isPending ? 'Em processo de pagamento' : undefined}
             className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-colors ${
-              isSold    ? 'bg-slate-200 text-slate-400 cursor-not-allowed line-through'
+              isSold      ? 'bg-slate-200 text-slate-400 cursor-not-allowed line-through'
               : isPending ? 'bg-amber-100 text-amber-500 cursor-not-allowed'
+              : isSelected ? 'bg-[#94A684] border-2 border-[#7d9270] text-white shadow-sm cursor-pointer'
               : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-[#94A684] hover:text-[#94A684] hover:bg-[#94A684]/5 cursor-pointer shadow-sm'
             }`}
           >
@@ -394,10 +414,11 @@ export default function RifaPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentReturn = searchParams.get('payment');
 
-  const [soldTickets,    setSoldTickets]    = useState<Set<number>>(new Set());
-  const [pendingTickets, setPendingTickets] = useState<Set<number>>(new Set());
-  const [loadingTickets, setLoadingTickets] = useState(true);
-  const [selectedTicket, setSelectedTicket] = useState<number | null>(null);
+  const [soldTickets,     setSoldTickets]     = useState<Set<number>>(new Set());
+  const [pendingTickets,  setPendingTickets]  = useState<Set<number>>(new Set());
+  const [loadingTickets,  setLoadingTickets]  = useState(true);
+  const [selectedTickets, setSelectedTickets] = useState<Set<number>>(new Set());
+  const [modalOpen,       setModalOpen]       = useState(false);
 
   // Config carregada do banco — defaults enquanto aguarda
   const [coupleName,    setCoupleName]    = useState('Larissa & Alvaro');
@@ -433,10 +454,18 @@ export default function RifaPage() {
       .finally(() => setLoadingTickets(false));
   }, []);
 
-  const handleSelect   = useCallback((n: number) => setSelectedTicket(n), []);
-  const handleClose    = useCallback(() => setSelectedTicket(null), []);
-  const handleReserved = useCallback((n: number) => {
-    setPendingTickets((prev) => new Set([...prev, n]));
+  const handleSelect = useCallback((n: number) => {
+    setSelectedTickets((prev) => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n); else next.add(n);
+      return next;
+    });
+  }, []);
+  const handleClose    = useCallback(() => setModalOpen(false), []);
+  const handleReserved = useCallback((ns: number[]) => {
+    setPendingTickets((prev) => new Set([...prev, ...ns]));
+    setSelectedTickets(new Set());
+    setModalOpen(false);
   }, []);
   const dismissBanner = useCallback(() => {
     setSearchParams((p) => { p.delete('payment'); return p; });
@@ -542,22 +571,29 @@ export default function RifaPage() {
           <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex-shrink-0">Aceita</p>
             <span className="flex items-center gap-1.5 bg-[#94A684]/10 text-[#94A684] text-xs font-black px-3 py-1.5 rounded-xl"><QrCode size={13} /> Pix</span>
-            <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-black px-3 py-1.5 rounded-xl"><CreditCard size={13} /> Cartão (sem redirecionar)</span>
+            <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-black px-3 py-1.5 rounded-xl"><CreditCard size={13} /> Cartão</span>
           </div>
         </div>
 
         {/* Grade */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#94A684]">Escolha seu bilhete</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#94A684]">Escolha seu(s) bilhete(s)</p>
             <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-white border-2 border-slate-200 inline-block" />Disponível</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#94A684] inline-block" />Selecionado</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-100 inline-block" />Reservado</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-200 inline-block" />Vendido</span>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-            <TicketGrid sold={soldTickets} pending={pendingTickets} loading={loadingTickets} totalTickets={totalTickets} onSelect={handleSelect} />
+            <TicketGrid
+              sold={soldTickets}
+              pending={pendingTickets}
+              selected={selectedTickets}
+              loading={loadingTickets}
+              totalTickets={totalTickets}
+              onSelect={handleSelect}
+            />
           </div>
         </section>
 
@@ -566,10 +602,10 @@ export default function RifaPage() {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Como participar</p>
           <ol className="space-y-2">
             {[
-              'Escolha um número disponível na grade',
+              'Clique nos números disponíveis para selecioná-los (pode escolher mais de um)',
+              'Clique em "Comprar" na barra que aparece na parte inferior',
               'Preencha nome e e-mail',
-              'Pague com Pix (QR Code) ou Cartão de Crédito — sem sair do site',
-              'Bilhete confirmado automaticamente após o pagamento',
+              'Pague com Pix (QR Code) ou Cartão de Crédito',
               `Sorteio ao vivo quando pelo menos ${stats.drawPct}% dos bilhetes forem vendidos (${drawTarget}/${totalTickets})`,
             ].map((s, i) => (
               <li key={i} className="flex items-start gap-3 text-sm text-slate-600">
@@ -588,10 +624,44 @@ export default function RifaPage() {
         </div>
       </div>
 
+      {/* Carrinho flutuante */}
       <AnimatePresence>
-        {selectedTicket !== null && (
+        {selectedTickets.size > 0 && !modalOpen && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+            className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-5 pt-3"
+          >
+            <div className="max-w-2xl mx-auto bg-slate-900 rounded-2xl shadow-2xl px-5 py-4 flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-sm">
+                  {selectedTickets.size} bilhete{selectedTickets.size > 1 ? 's' : ''} selecionado{selectedTickets.size > 1 ? 's' : ''}
+                </p>
+                <p className="text-white/50 text-xs mt-0.5">
+                  Total: <span className="text-white/80 font-bold">R$ {selectedTickets.size * ticketPrice},00</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedTickets(new Set())}
+                className="text-white/40 hover:text-white/70 transition-colors text-xs font-bold px-2 py-1 flex-shrink-0"
+              >
+                Limpar
+              </button>
+              <button
+                onClick={() => setModalOpen(true)}
+                className="bg-[#94A684] hover:bg-[#7d9270] text-white font-black text-sm px-5 py-2.5 rounded-xl transition-colors flex-shrink-0"
+              >
+                Comprar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {modalOpen && selectedTickets.size > 0 && (
           <BuyModal
-            number={selectedTicket}
+            numbers={[...selectedTickets].sort((a, b) => a - b)}
             ticketPrice={ticketPrice}
             drawTarget={drawTarget}
             drawPct={stats.drawPct}

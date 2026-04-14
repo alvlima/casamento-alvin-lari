@@ -2,9 +2,11 @@ import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Users, CheckCircle2, XCircle, Gift, TrendingUp,
-  Search, MessageSquare, Calendar, ChevronDown, ChevronUp,
+  Search, MessageSquare, Calendar, ChevronDown,
   RefreshCw, LogOut, Ticket, Plus, Pencil, Trash2, Save, Ban,
-  Settings, Eye, EyeOff,
+  Settings, Eye, EyeOff, Check, AlertCircle,
+  Coffee, Plane, Cat, Wine, Heart, Pizza, BookOpen, Gamepad2,
+  Sparkles, Home, Star, Music, Camera, ShoppingBag, Leaf, Trophy,
 } from 'lucide-react';
 import {
   fetchDashboardStats,
@@ -45,11 +47,204 @@ type Tab = 'overview' | 'rsvp' | 'gifts' | 'rifa' | 'site';
 function fmt(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
+}
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+
+const inputCls = 'w-full px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white text-sm text-stone-900 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8FA9B8]/40 focus:border-[#8FA9B8] transition-all';
+const textareaCls = `${inputCls} resize-none`;
+const labelCls = 'block text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-1.5';
+
+// ── Tag color presets ─────────────────────────────────────────────────────────
+
+const TAG_PRESETS = [
+  { label: 'Âmbar',   classes: 'bg-amber-100 text-amber-700' },
+  { label: 'Laranja', classes: 'bg-orange-100 text-orange-700' },
+  { label: 'Verde',   classes: 'bg-emerald-100 text-emerald-700' },
+  { label: 'Musgo',   classes: 'bg-green-100 text-green-700' },
+  { label: 'Teal',    classes: 'bg-teal-100 text-teal-700' },
+  { label: 'Azul',    classes: 'bg-sky-100 text-sky-700' },
+  { label: 'Índigo',  classes: 'bg-indigo-100 text-indigo-700' },
+  { label: 'Roxo',    classes: 'bg-violet-100 text-violet-700' },
+  { label: 'Rosa',    classes: 'bg-pink-100 text-pink-700' },
+  { label: 'Rubi',    classes: 'bg-rose-100 text-rose-700' },
+  { label: 'Cinza',   classes: 'bg-slate-100 text-slate-600' },
+];
+
+// ── Icon presets ──────────────────────────────────────────────────────────────
+
+const ICON_MAP: Record<string, React.ReactNode> = {
+  coffee:       <Coffee size={16} />,
+  plane:        <Plane size={16} />,
+  cat:          <Cat size={16} />,
+  wine:         <Wine size={16} />,
+  plant:        <Leaf size={16} />,
+  heart:        <Heart size={16} />,
+  pizza:        <Pizza size={16} />,
+  book:         <BookOpen size={16} />,
+  gamepad:      <Gamepad2 size={16} />,
+  sparkles:     <Sparkles size={16} />,
+  gift:         <Gift size={16} />,
+  home:         <Home size={16} />,
+  star:         <Star size={16} />,
+  music:        <Music size={16} />,
+  camera:       <Camera size={16} />,
+  'shopping-bag': <ShoppingBag size={16} />,
+  trophy:         <Trophy size={16} />,
+};
+const ICON_KEYS = Object.keys(ICON_MAP);
+
+// ── UI Primitives ─────────────────────────────────────────────────────────────
+
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <label className="block">
+      <span className={labelCls}>{label}</span>
+      {children}
+      {hint && <p className="mt-1 text-[11px] text-stone-400">{hint}</p>}
+    </label>
+  );
+}
+
+function SaveBtn({ saving, saved, onSave, label = 'Salvar' }: { saving: boolean; saved: boolean; onSave: () => void; label?: string }) {
+  return (
+    <button
+      onClick={onSave}
+      disabled={saving}
+      className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${
+        saved
+          ? 'bg-[#94A684] text-white'
+          : 'bg-stone-900 text-white hover:bg-[#94A684]'
+      }`}
+    >
+      {saving ? (
+        <RefreshCw size={13} className="animate-spin" />
+      ) : saved ? (
+        <Check size={13} />
+      ) : (
+        <Save size={13} />
+      )}
+      {saving ? 'Salvando…' : saved ? 'Salvo!' : label}
+    </button>
+  );
+}
+
+function InlineMsg({ msg }: { msg: string }) {
+  if (!msg) return null;
+  const isError = !msg.toLowerCase().includes('salvo') && !msg.toLowerCase().includes('salva') && !msg.toLowerCase().includes('sucesso');
+  return (
+    <p className={`flex items-center gap-1.5 text-xs font-semibold ${isError ? 'text-red-500' : 'text-[#94A684]'}`}>
+      {isError ? <AlertCircle size={12} /> : <Check size={12} />}
+      {msg}
+    </p>
+  );
+}
+
+// ── Delete button com confirmação inline ─────────────────────────────────────
+
+function DeleteButton({ onConfirm, disabled = false, size = 'sm' }: {
+  onConfirm: () => void;
+  disabled?: boolean;
+  size?: 'sm' | 'xs';
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-1.5 bg-red-50 rounded-xl px-2 py-1.5">
+        <span className="text-[11px] text-red-600 font-semibold whitespace-nowrap">Tem certeza?</span>
+        <button
+          onClick={() => { setConfirming(false); onConfirm(); }}
+          className="text-[11px] font-bold text-white bg-red-500 hover:bg-red-600 px-2 py-0.5 rounded-lg transition-colors"
+        >
+          Sim
+        </button>
+        <button
+          onClick={() => setConfirming(false)}
+          className="text-[11px] font-bold text-stone-500 hover:text-stone-800 px-1 py-0.5 transition-colors"
+        >
+          Não
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setConfirming(true)}
+      disabled={disabled}
+      className={`flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 ${size === 'sm' ? 'w-8 h-8' : 'w-7 h-7'}`}
+      aria-label="Excluir"
+    >
+      <Trash2 size={size === 'sm' ? 13 : 12} />
+    </button>
+  );
+}
+
+// ── Tag color picker ──────────────────────────────────────────────────────────
+
+function TagColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <span className={labelCls}>Cor da tag</span>
+      <div className="flex flex-wrap gap-1.5">
+        {TAG_PRESETS.map((p) => (
+          <button
+            key={p.classes}
+            type="button"
+            onClick={() => onChange(p.classes)}
+            title={p.label}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ring-offset-1 transition-all ${p.classes} ${
+              value === p.classes ? 'ring-2 ring-stone-700 scale-105' : 'hover:scale-105 opacity-80 hover:opacity-100'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Icon picker ───────────────────────────────────────────────────────────────
+
+function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <span className={labelCls}>Ícone</span>
+      <div className="flex flex-wrap gap-1.5">
+        {ICON_KEYS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            title={key}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${
+              value === key
+                ? 'bg-stone-900 text-white border-stone-900 scale-105'
+                : 'bg-white border-stone-200 text-stone-400 hover:border-stone-400 hover:text-stone-700'
+            }`}
+            aria-label={key}
+          >
+            {ICON_MAP[key]}
+          </button>
+        ))}
+        {/* fallback: campo manual se o ícone não está nos presets */}
+        {!ICON_KEYS.includes(value) && value && (
+          <div className="w-9 h-9 flex items-center justify-center rounded-xl bg-stone-900 text-white border border-stone-900">
+            <Gift size={16} />
+          </div>
+        )}
+      </div>
+      {!ICON_KEYS.includes(value) && value && (
+        <p className="mt-1.5 text-[11px] text-stone-400">Ícone personalizado: <code className="bg-stone-100 px-1 rounded">{value}</code></p>
+      )}
+    </div>
+  );
 }
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -66,15 +261,61 @@ const StatCard = memo(({ label, value, icon, accent, sub }: StatCardProps) => (
   <div className={`bg-white rounded-2xl p-5 border-l-4 ${accent} shadow-sm`}>
     <div className="flex items-start justify-between">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-        <p className="text-3xl font-black text-slate-900 mt-1">{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+        <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">{label}</p>
+        <p className="text-3xl font-black text-stone-900 mt-1">{value}</p>
+        {sub && <p className="text-xs text-stone-400 mt-1">{sub}</p>}
       </div>
-      <div className="text-slate-300">{icon}</div>
+      <div className="text-stone-300">{icon}</div>
     </div>
   </div>
 ));
 StatCard.displayName = 'StatCard';
+
+// ── Section accordion ─────────────────────────────────────────────────────────
+
+function Section({ title, children, defaultOpen = false, count }: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  count?: number;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-stone-100">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-stone-50 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <p className="text-[11px] font-black uppercase tracking-widest text-stone-600">{title}</p>
+          {count !== undefined && (
+            <span className="text-[10px] font-bold bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full">
+              {count}
+            </span>
+          )}
+        </div>
+        <div className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+          <ChevronDown size={15} className="text-stone-400" />
+        </div>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-5 space-y-4 border-t border-stone-100 pt-4">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 
@@ -109,12 +350,9 @@ const OverviewTab = memo(({ stats }: { stats: DashboardStats }) => (
       />
     </div>
 
-    {/* Progress bar confirmações */}
-    <div className="bg-white rounded-2xl p-5 shadow-sm">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-        Confirmações vs. Total de Respostas
-      </p>
-      <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-stone-100">
+      <p className={`${labelCls} mb-3`}>Confirmações vs. Total de Respostas</p>
+      <div className="h-3 bg-stone-100 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(stats.confirmed / Math.max(stats.total_rsvp, 1)) * 100}%` }}
@@ -122,7 +360,7 @@ const OverviewTab = memo(({ stats }: { stats: DashboardStats }) => (
           className="h-full bg-[#94A684] rounded-full"
         />
       </div>
-      <div className="flex justify-between mt-2 text-xs text-slate-400">
+      <div className="flex justify-between mt-2 text-xs text-stone-400">
         <span>{stats.confirmed} confirmados</span>
         <span>{stats.declined} declinaram</span>
       </div>
@@ -151,69 +389,61 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
 
   return (
     <div className="space-y-4">
-      {/* Controles */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar convidado..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-[#94A684] transition-colors"
+            placeholder="Buscar convidado…"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#8FA9B8]/40 focus:border-[#8FA9B8] transition-all"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {(['all', 'confirmed', 'declined'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 filter === f
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-400'
+                  ? 'bg-stone-900 text-white'
+                  : 'bg-white text-stone-500 border border-stone-200 hover:border-stone-400'
               }`}
             >
-              {f === 'all' ? 'Todos' : f === 'confirmed' ? 'Confirmados' : 'Declinaram'}
+              {f === 'all' ? 'Todos' : f === 'confirmed' ? '✓ Confirmados' : '✗ Declinaram'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Lista */}
       <div className="space-y-2">
         {filtered.length === 0 && (
-          <p className="text-center text-slate-400 text-sm italic py-8">Nenhum resultado.</p>
+          <p className="text-center text-stone-400 text-sm italic py-8">Nenhum resultado.</p>
         )}
         {filtered.map((r) => (
-          <div key={r.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+          <div key={r.id} className="bg-white rounded-2xl overflow-hidden border border-stone-100 shadow-sm">
             <button
-              className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-colors"
               onClick={() => setExpanded(expanded === r.id ? null : r.id)}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${r.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
                 <div>
-                  <p className="font-bold text-slate-900 text-sm">{r.name}</p>
-                  <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                  <p className="font-semibold text-stone-900 text-sm">{r.name}</p>
+                  <p className="text-xs text-stone-400 flex items-center gap-1 mt-0.5">
                     <Calendar size={10} />
                     {fmtDate(r.created_at)}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                  r.attendance ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+              <div className="flex items-center gap-2.5">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                  r.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
                 }`}>
                   {r.attendance ? 'Confirmado' : 'Declinado'}
                 </span>
-                {r.message && (
-                  <MessageSquare size={14} className="text-slate-400 flex-shrink-0" />
-                )}
-                {expanded === r.id ? (
-                  <ChevronUp size={14} className="text-slate-400" />
-                ) : (
-                  <ChevronDown size={14} className="text-slate-400" />
-                )}
+                {r.message && <MessageSquare size={13} className="text-stone-400 flex-shrink-0" />}
+                <ChevronDown size={13} className={`text-stone-400 transition-transform ${expanded === r.id ? 'rotate-180' : ''}`} />
               </div>
             </button>
             <AnimatePresence>
@@ -224,7 +454,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <p className="px-5 pb-4 text-sm text-slate-600 italic border-t border-slate-100 pt-3">
+                  <p className="px-5 pb-4 text-sm text-stone-600 italic border-t border-stone-100 pt-3">
                     "{r.message}"
                   </p>
                 </motion.div>
@@ -240,12 +470,7 @@ RsvpTab.displayName = 'RsvpTab';
 
 // ── Gifts tab ─────────────────────────────────────────────────────────────────
 
-interface GiftsTabProps {
-  summaries: GiftSummary[];
-  contributions: GiftContribution[];
-}
-
-const GiftsTab = memo(({ summaries, contributions }: GiftsTabProps) => {
+const GiftsTab = memo(({ summaries, contributions }: { summaries: GiftSummary[]; contributions: GiftContribution[] }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const totalAll = useMemo(
@@ -257,17 +482,17 @@ const GiftsTab = memo(({ summaries, contributions }: GiftsTabProps) => {
     const map = new Map<string, GiftContribution[]>();
     for (const c of contributions) {
       const key = c.gift_item_id ?? '__free__';
-      const prev = map.get(key) ?? [];
-      map.set(key, [...prev, c]);
+      map.set(key, [...(map.get(key) ?? []), c]);
     }
     return map;
   }, [contributions]);
 
   return (
     <div className="space-y-3">
-      <div className="bg-white rounded-2xl p-4 border-l-4 border-[#94A684] shadow-sm mb-5">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total arrecadado</p>
-        <p className="text-4xl font-black text-slate-900 mt-1">R$ {fmt(totalAll)}</p>
+      <div className="bg-white rounded-2xl p-5 border-l-4 border-[#94A684] shadow-sm">
+        <p className={labelCls}>Total arrecadado</p>
+        <p className="text-4xl font-black text-stone-900 mt-1">R$ {fmt(totalAll)}</p>
+        <p className="text-xs text-stone-400 mt-1">{summaries.length} presente{summaries.length !== 1 ? 's' : ''} com contribuições</p>
       </div>
 
       {summaries.map((g) => {
@@ -275,20 +500,20 @@ const GiftsTab = memo(({ summaries, contributions }: GiftsTabProps) => {
         const items = byGift.get(rowKey) ?? [];
         const isOpen = expanded === rowKey;
         return (
-          <div key={rowKey} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+          <div key={rowKey} className="bg-white rounded-2xl overflow-hidden border border-stone-100 shadow-sm">
             <button
-              className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-colors"
               onClick={() => setExpanded(isOpen ? null : rowKey)}
             >
               <div>
-                <p className="font-bold text-slate-900 text-sm">{g.gift_title}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="font-semibold text-stone-900 text-sm">{g.gift_title}</p>
+                <p className="text-xs text-stone-400 mt-0.5">
                   {g.contribution_count} {g.contribution_count === 1 ? 'contribuição' : 'contribuições'} · média R$ {fmt(g.avg_amount)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-lg font-black text-slate-900">R$ {fmt(g.total_amount)}</span>
-                {isOpen ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                <span className="text-lg font-black text-stone-900">R$ {fmt(g.total_amount)}</span>
+                <ChevronDown size={13} className={`text-stone-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
               </div>
             </button>
             <AnimatePresence>
@@ -299,14 +524,14 @@ const GiftsTab = memo(({ summaries, contributions }: GiftsTabProps) => {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="border-t border-slate-100 divide-y divide-slate-50">
+                  <div className="border-t border-stone-100 divide-y divide-stone-50">
                     {items.map((c) => (
                       <div key={c.id} className="flex items-center justify-between px-5 py-3">
                         <div>
-                          <p className="text-sm font-medium text-slate-700">
-                            {c.contributor ?? <span className="italic text-slate-400">Anônimo</span>}
+                          <p className="text-sm font-medium text-stone-700">
+                            {c.contributor ?? <span className="italic text-stone-400">Anônimo</span>}
                           </p>
-                          <p className="text-xs text-slate-400">{fmtDate(c.created_at)}</p>
+                          <p className="text-xs text-stone-400">{fmtDate(c.created_at)}</p>
                         </div>
                         <span className="text-sm font-black text-[#94A684]">R$ {fmt(c.amount)}</span>
                       </div>
@@ -323,131 +548,315 @@ const GiftsTab = memo(({ summaries, contributions }: GiftsTabProps) => {
 });
 GiftsTab.displayName = 'GiftsTab';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Rifa tab ──────────────────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const EMPTY_PRIZE: Omit<RifaPrize, 'id'> = { title: '', description: '', display_order: 1 };
+
+const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () => Promise<void> }) => {
+  const [cfg, setCfg]             = useState<RifaConfig>({ ...data.config });
+  const [cfgSaving, setCfgSaving] = useState(false);
+  const [cfgSaved, setCfgSaved]   = useState(false);
+  const [cfgMsg, setCfgMsg]       = useState('');
+
+  const prizes = data.prizes;
+  const [editId, setEditId]           = useState<string | 'new' | null>(null);
+  const [form, setForm]               = useState<Omit<RifaPrize, 'id'>>(EMPTY_PRIZE);
+  const [prizeLoading, setPrizeLoading] = useState(false);
+  const [prizeMsg, setPrizeMsg]       = useState('');
+
+  const [ticketsOpen, setTicketsOpen] = useState(false);
+
+  const handleSaveConfig = useCallback(async () => {
+    setCfgSaving(true); setCfgMsg(''); setCfgSaved(false);
+    try {
+      await saveRifaConfig(cfg);
+      await onRefresh();
+      setCfgSaved(true);
+      setTimeout(() => setCfgSaved(false), 2500);
+    } catch (e) {
+      setCfgMsg((e as Error).message);
+    } finally {
+      setCfgSaving(false);
+    }
+  }, [cfg, onRefresh]);
+
+  const openNew = useCallback(() => {
+    setForm({ ...EMPTY_PRIZE, display_order: prizes.length + 1 });
+    setEditId('new'); setPrizeMsg('');
+  }, [prizes.length]);
+
+  const openEdit = useCallback((prize: RifaPrize) => {
+    setForm({ title: prize.title, description: prize.description, display_order: prize.display_order });
+    setEditId(prize.id); setPrizeMsg('');
+  }, []);
+
+  const cancelEdit = useCallback(() => { setEditId(null); setPrizeMsg(''); }, []);
+
+  const handleSavePrize = useCallback(async () => {
+    if (!form.title.trim()) { setPrizeMsg('O título é obrigatório.'); return; }
+    setPrizeLoading(true); setPrizeMsg('');
+    try {
+      if (editId === 'new') await addRifaPrize(form);
+      else await updateRifaPrize(editId!, form);
+      setEditId(null);
+      await onRefresh();
+    } catch (e) {
+      setPrizeMsg((e as Error).message);
+    } finally {
+      setPrizeLoading(false);
+    }
+  }, [editId, form, onRefresh]);
+
+  const handleDeletePrize = useCallback(async (id: string) => {
+    try { await deleteRifaPrize(id); await onRefresh(); }
+    catch (e) { setPrizeMsg((e as Error).message); }
+  }, [onRefresh]);
+
+  const { sold, pending, stats } = data.tickets;
+  const soldPct = Math.min(100, (stats.sold / Math.max(cfg.total_tickets, 1)) * 100);
+  const drawTarget = Math.ceil(cfg.total_tickets * cfg.draw_threshold_pct);
+
   return (
-    <label className="block">
-      <span className="text-xs font-bold text-slate-500 block mb-1">{label}</span>
-      {children}
-    </label>
-  );
-}
+    <div className="space-y-5">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard label="Vendidos"    value={stats.sold}      icon={<CheckCircle2 size={26} />} accent="border-[#94A684]" sub={`R$ ${fmt(stats.sold * cfg.ticket_price)}`} />
+        <StatCard label="Reservados"  value={stats.pending}   icon={<Ticket size={26} />}        accent="border-[#D6BC9D]" />
+        <StatCard label="Disponíveis" value={stats.available} icon={<Gift size={26} />}           accent="border-[#8FA9B8]" sub={`de ${cfg.total_tickets} total`} />
+      </div>
 
-const inputCls = 'w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 focus:outline-none focus:border-[#94A684] focus:bg-white transition-colors';
-const textareaCls = `${inputCls} resize-none`;
-
-function SaveBar({ saving, msg, onSave }: { saving: boolean; msg: string; onSave: () => void }) {
-  const ok = msg.toLowerCase().includes('salvo') || msg.toLowerCase().includes('salva');
-  return (
-    <div className="flex items-center gap-3 pt-2">
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all disabled:opacity-50"
-      >
-        {saving ? 'Salvando...' : 'Salvar'}
-      </button>
-      {msg && <p className={`text-xs font-bold ${ok ? 'text-[#94A684]' : 'text-red-500'}`}>{msg}</p>}
-    </div>
-  );
-}
-
-function Section({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-50 transition-colors"
-      >
-        <p className="text-[11px] font-black uppercase tracking-widest text-slate-600">{title}</p>
-        {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
+      {/* Progresso */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-stone-100">
+        <div className="flex items-center justify-between mb-3">
+          <p className={labelCls}>Progresso da venda</p>
+          <span className="text-xs font-semibold text-stone-500">
+            Meta: {drawTarget} bilhetes ({Math.round(cfg.draw_threshold_pct * 100)}%)
+          </span>
+        </div>
+        <div className="h-3 bg-stone-100 rounded-full overflow-hidden">
           <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
-              {children}
-            </div>
-          </motion.div>
+            initial={{ width: 0 }}
+            animate={{ width: `${soldPct}%` }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className="h-full bg-[#94A684] rounded-full"
+          />
+        </div>
+        <div className="flex justify-between mt-2 text-xs text-stone-400">
+          <span>{stats.sold} vendidos · {stats.pending} pendentes</span>
+          <span className={soldPct >= cfg.draw_threshold_pct * 100 ? 'text-[#94A684] font-bold' : ''}>
+            {soldPct >= cfg.draw_threshold_pct * 100 ? '✓ Meta atingida!' : `${stats.available} restantes`}
+          </span>
+        </div>
+      </div>
+
+      {/* Config */}
+      <Section title="Configuração da Rifa" defaultOpen>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Valor por bilhete (R$)">
+            <input type="number" min="1" step="0.01" value={cfg.ticket_price} className={inputCls}
+              onChange={(e) => setCfg((c) => ({ ...c, ticket_price: parseFloat(e.target.value) || 0 }))} />
+          </Field>
+          <Field label="Total de bilhetes">
+            <input type="number" min="1" step="1" value={cfg.total_tickets} className={inputCls}
+              onChange={(e) => setCfg((c) => ({ ...c, total_tickets: parseInt(e.target.value) || 0 }))} />
+          </Field>
+          <Field label="% mínimo para sortear" hint="Ex: 95 = sortear quando 95% vendido">
+            <input type="number" min="1" max="100" step="1"
+              value={Math.round(cfg.draw_threshold_pct * 100)} className={inputCls}
+              onChange={(e) => setCfg((c) => ({ ...c, draw_threshold_pct: (parseInt(e.target.value) || 0) / 100 }))} />
+          </Field>
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          <SaveBtn saving={cfgSaving} saved={cfgSaved} onSave={handleSaveConfig} label="Salvar configuração" />
+          <InlineMsg msg={cfgMsg} />
+        </div>
+      </Section>
+
+      {/* Prêmios */}
+      <Section title="Prêmios" count={prizes.length} defaultOpen>
+        {editId === null && (
+          <button onClick={openNew}
+            className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-stone-200 rounded-xl text-xs font-semibold text-stone-400 hover:border-[#94A684] hover:text-[#94A684] transition-colors">
+            <Plus size={14} /> Adicionar prêmio
+          </button>
         )}
-      </AnimatePresence>
+
+        <AnimatePresence>
+          {editId !== null && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="border border-stone-200 rounded-2xl p-4 bg-stone-50 space-y-3">
+                <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+                  {editId === 'new' ? '+ Novo prêmio' : 'Editar prêmio'}
+                </p>
+                <div className="grid sm:grid-cols-4 gap-3">
+                  <div className="sm:col-span-3">
+                    <Field label="Título *">
+                      <input value={form.title} className={inputCls} placeholder="Ex: 🥇 Jantar para dois"
+                        onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+                    </Field>
+                  </div>
+                  <Field label="Posição">
+                    <input type="number" min="1" value={form.display_order} className={inputCls}
+                      onChange={(e) => setForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 1 }))} />
+                  </Field>
+                </div>
+                <Field label="Descrição">
+                  <textarea rows={2} value={form.description} className={textareaCls} placeholder="Detalhes do prêmio…"
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+                </Field>
+                {prizeMsg && <InlineMsg msg={prizeMsg} />}
+                <div className="flex gap-2">
+                  <button onClick={handleSavePrize} disabled={prizeLoading}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#94A684] transition-all disabled:opacity-50">
+                    <Save size={12} /> {prizeLoading ? 'Salvando…' : 'Salvar'}
+                  </button>
+                  <button onClick={cancelEdit}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-100 text-stone-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-stone-200 transition-all">
+                    <Ban size={12} /> Cancelar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {prizes.length === 0 && editId === null && (
+          <p className="text-sm text-stone-400 italic text-center py-3">Nenhum prêmio cadastrado ainda.</p>
+        )}
+        <div className="space-y-2">
+          {prizes.map((prize) => (
+            <div key={prize.id} className="flex items-start justify-between gap-3 p-4 rounded-xl border border-stone-100 hover:border-stone-200 bg-white transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black text-stone-300">{prize.display_order}°</span>
+                  <p className="font-semibold text-stone-900 text-sm">{prize.title}</p>
+                </div>
+                {prize.description && (
+                  <p className="text-xs text-stone-400 mt-0.5 ml-5 leading-relaxed">{prize.description}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => openEdit(prize)} disabled={editId !== null}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors disabled:opacity-30"
+                  aria-label="Editar">
+                  <Pencil size={13} />
+                </button>
+                <DeleteButton onConfirm={() => handleDeletePrize(prize.id)} disabled={editId !== null} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* Bilhetes */}
+      <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
+        <button onClick={() => setTicketsOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-stone-50 transition-colors">
+          <p className={labelCls}>Bilhetes vendidos e reservados ({sold.length + pending.length})</p>
+          <ChevronDown size={14} className={`text-stone-400 transition-transform ${ticketsOpen ? 'rotate-180' : ''}`} />
+        </button>
+        <AnimatePresence>
+          {ticketsOpen && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="border-t border-stone-100 divide-y divide-stone-50">
+                {[...sold, ...pending].sort((a, b) => a.ticket_number - b.ticket_number).map((t) => (
+                  <div key={t.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-black text-stone-900 w-10 text-center bg-stone-100 rounded-lg py-1">
+                        #{t.ticket_number}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-stone-900">{t.buyer_name ?? '—'}</p>
+                        <p className="text-xs text-stone-400">{t.buyer_email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 flex-shrink-0">
+                      <span className="text-xs font-bold text-stone-500">R$ {fmt(t.amount)}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                        t.payment_status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {t.payment_status === 'approved' ? 'Pago' : 'Pendente'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {sold.length === 0 && pending.length === 0 && (
+                  <p className="text-sm text-stone-400 italic text-center py-6 px-5">Nenhum bilhete vendido ainda.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
-}
+});
+RifaTab.displayName = 'RifaTab';
 
-// ── Site tab ───────────────────────────────────────────────────────────────────
+// ── Site tab ──────────────────────────────────────────────────────────────────
 
 const ROOM_LABELS: Record<string, string> = {
-  entrada:    'Entrada',
-  sala:       'Sala',
-  escritorio: 'Escritório',
-  varanda:    'Varanda',
+  entrada:    '🚪 Entrada',
+  sala:       '🛋️ Sala',
+  escritorio: '💻 Escritório',
+  varanda:    '🌿 Varanda',
 };
 
 const EMPTY_GIFT: Omit<AdminGiftItem, 'id'> = {
   slug: '', title: '', subtitle: '', description: '',
-  suggested_amount: null, tag: '', tag_color: '', emoji_name: 'gift',
-  display_order: 0, active: true,
+  suggested_amount: null, tag: '', tag_color: 'bg-amber-100 text-amber-700',
+  emoji_name: 'gift', display_order: 0, active: true,
 };
 
-const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () => Promise<void> }) => {
-  // ── Casal ──
-  const [couple, setCouple]       = useState<SiteEditorCouple>({ ...data.couple });
-  const [coupleSaving, setCS]     = useState(false);
-  const [coupleMsg,    setCMsg]   = useState('');
+function useSaveState() {
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [msg,    setMsg]    = useState('');
 
-  // ── Conteúdo ──
-  const [content, setContent]     = useState<SiteEditorContent>({ ...data.content });
-  const [contentSaving, setContS] = useState(false);
-  const [contentMsg, setContMsg]  = useState('');
-
-  // ── Cômodos ──
-  const [rooms, setRooms]         = useState({ ...data.rooms });
-  const [roomsSaving, setRS]      = useState(false);
-  const [roomsMsg, setRMsg]       = useState('');
-
-  // ── Presentes ──
-  const gifts = data.gifts;
-  const [giftEdit, setGiftEdit]   = useState<string | 'new' | null>(null);
-  const [giftForm, setGiftForm]   = useState<Omit<AdminGiftItem, 'id'>>(EMPTY_GIFT);
-  const [giftSaving, setGS]       = useState(false);
-  const [giftMsg, setGiftMsg]     = useState('');
-  const [showInactive, setShowInactive] = useState(false);
-
-  const save = useCallback(async (
-    fn: () => Promise<void>,
-    setSaving: (v: boolean) => void,
-    setMsg: (v: string) => void,
-    successMsg = 'Salvo com sucesso!'
-  ) => {
-    setSaving(true); setMsg('');
+  const run = useCallback(async (fn: () => Promise<void>, successMsg = '') => {
+    setSaving(true); setMsg(''); setSaved(false);
     try {
       await fn();
-      await onRefresh();
-      setMsg(successMsg);
-      setTimeout(() => setMsg(''), 2500);
+      setSaved(true);
+      if (successMsg) setMsg(successMsg);
+      setTimeout(() => { setSaved(false); setMsg(''); }, 2500);
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
       setSaving(false);
     }
-  }, [onRefresh]);
+  }, []);
+
+  return { saving, saved, msg, run };
+}
+
+const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () => Promise<void> }) => {
+  const [couple,  setCouple]  = useState<SiteEditorCouple>({ ...data.couple });
+  const [content, setContent] = useState<SiteEditorContent>({ ...data.content });
+  const [rooms,   setRooms]   = useState({ ...data.rooms });
+
+  const coupleState  = useSaveState();
+  const contentState = useSaveState();
+  const roomsState   = useSaveState();
+
+  const gifts = data.gifts;
+  const [giftEdit, setGiftEdit] = useState<string | 'new' | null>(null);
+  const [giftForm, setGiftForm] = useState<Omit<AdminGiftItem, 'id'>>(EMPTY_GIFT);
+  const [giftSaving, setGS]     = useState(false);
+  const [giftMsg, setGiftMsg]   = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const [deleteError, setDeleteError]   = useState('');
 
   const updateRoom = useCallback((key: string, field: string, value: string) => {
     setRooms((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   }, []);
 
-  const openNewGift  = useCallback(() => {
-    setGiftForm({ ...EMPTY_GIFT, display_order: gifts.length + 1 });
+  const openNewGift = useCallback(() => {
+    setGiftForm({ ...EMPTY_GIFT, display_order: gifts.filter(g => g.active).length + 1 });
     setGiftEdit('new'); setGiftMsg('');
-  }, [gifts.length]);
+  }, [gifts]);
 
   const openEditGift = useCallback((g: AdminGiftItem) => {
     setGiftForm({ slug: g.slug, title: g.title, subtitle: g.subtitle, description: g.description,
@@ -469,9 +878,9 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
   }, [giftEdit, giftForm, onRefresh]);
 
   const handleDeleteGift = useCallback(async (id: string) => {
-    if (!confirm('Desativar este presente?')) return;
+    setDeleteError('');
     try { await deleteAdminGift(id); await onRefresh(); }
-    catch (e) { alert((e as Error).message); }
+    catch (e) { setDeleteError((e as Error).message); }
   }, [onRefresh]);
 
   const visibleGifts = useMemo(
@@ -485,12 +894,12 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
       {/* ── Casal ── */}
       <Section title="Casal — nomes, data e local" defaultOpen>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Nome de exibição (ex: Larissa & Alvaro)">
-            <input className={inputCls} value={couple.display_name}
+          <Field label="Nome de exibição" hint="Aparece no cabeçalho do site">
+            <input className={inputCls} placeholder="Larissa & Alvaro" value={couple.display_name}
               onChange={(e) => setCouple((c) => ({ ...c, display_name: e.target.value }))} />
           </Field>
-          <Field label="Nome do apartamento / lar">
-            <input className={inputCls} value={couple.home_name}
+          <Field label="Nome do apartamento" hint="Usado no jogo de exploração">
+            <input className={inputCls} placeholder="AP Patinhas" value={couple.home_name}
               onChange={(e) => setCouple((c) => ({ ...c, home_name: e.target.value }))} />
           </Field>
           <Field label="Nome — Parceiro 1">
@@ -501,11 +910,11 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
             <input className={inputCls} value={couple.partner2}
               onChange={(e) => setCouple((c) => ({ ...c, partner2: e.target.value }))} />
           </Field>
-          <Field label="Data do casamento (YYYY-MM-DD)">
+          <Field label="Data do casamento">
             <input className={inputCls} type="date" value={couple.wedding_date}
               onChange={(e) => setCouple((c) => ({ ...c, wedding_date: e.target.value }))} />
           </Field>
-          <Field label="Horário (HH:MM)">
+          <Field label="Horário">
             <input className={inputCls} type="time" value={couple.wedding_time}
               onChange={(e) => setCouple((c) => ({ ...c, wedding_time: e.target.value }))} />
           </Field>
@@ -513,51 +922,60 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
             <input className={inputCls} value={couple.wedding_location}
               onChange={(e) => setCouple((c) => ({ ...c, wedding_location: e.target.value }))} />
           </Field>
-          <Field label="Chave Pix">
+          <Field label="Chave Pix" hint="Email, CPF, telefone ou chave aleatória">
             <input className={inputCls} value={couple.pix_key}
               onChange={(e) => setCouple((c) => ({ ...c, pix_key: e.target.value }))} />
           </Field>
         </div>
-        <SaveBar saving={coupleSaving} msg={coupleMsg}
-          onSave={() => save(() => saveAdminCouple(couple), setCS, setCMsg)} />
+        <div className="flex items-center gap-3 pt-1">
+          <SaveBtn saving={coupleState.saving} saved={coupleState.saved}
+            onSave={() => coupleState.run(() => saveAdminCouple(couple).then(() => onRefresh()))} />
+          <InlineMsg msg={coupleState.msg} />
+        </div>
       </Section>
 
-      {/* ── Conteúdo / Intro ── */}
+      {/* ── Conteúdo ── */}
       <Section title="Tela inicial — título e subtítulo">
-        <p className="text-xs text-slate-400 -mt-2">Use <code className="bg-slate-100 px-1 rounded">|</code> no título para quebrar em itálico (ex: <code className="bg-slate-100 px-1 rounded">Um Convite | fora dos Dados.</code>)</p>
+        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700">
+          Use <code className="bg-white/60 px-1.5 py-0.5 rounded font-mono">|</code> no título para separar em itálico.
+          Exemplo: <em>Um Convite | fora dos Dados.</em>
+        </div>
         <Field label="Título da intro">
           <input className={inputCls} value={content.intro_title}
             onChange={(e) => setContent((c) => ({ ...c, intro_title: e.target.value }))} />
         </Field>
-        <Field label="Subtítulo / parágrafo de boas-vindas">
+        <Field label="Parágrafo de boas-vindas">
           <textarea className={textareaCls} rows={3} value={content.intro_subtitle}
             onChange={(e) => setContent((c) => ({ ...c, intro_subtitle: e.target.value }))} />
         </Field>
-        <SaveBar saving={contentSaving} msg={contentMsg}
-          onSave={() => save(() => saveAdminContent(content), setContS, setContMsg)} />
+        <div className="flex items-center gap-3 pt-1">
+          <SaveBtn saving={contentState.saving} saved={contentState.saved}
+            onSave={() => contentState.run(() => saveAdminContent(content).then(() => onRefresh()))} />
+          <InlineMsg msg={contentState.msg} />
+        </div>
       </Section>
 
       {/* ── Cômodos ── */}
       <Section title="Cômodos — títulos e descrições">
-        <div className="space-y-5">
+        <div className="space-y-4">
           {Object.entries(ROOM_LABELS).map(([key, label]) => {
             const r = rooms[key] ?? { title: '', desc: '', nextText: '' };
             return (
-              <div key={key} className="p-4 rounded-xl border border-slate-100 space-y-3">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">{label}</p>
+              <div key={key} className="p-4 rounded-xl border border-stone-100 bg-stone-50 space-y-3">
+                <p className="text-xs font-bold text-stone-500">{label}</p>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  <Field label="Título">
+                  <Field label="Título do cômodo">
                     <input className={inputCls} value={r.title}
                       onChange={(e) => updateRoom(key, 'title', e.target.value)} />
                   </Field>
                   {key !== 'varanda' && (
-                    <Field label="Texto do botão de avançar">
+                    <Field label="Botão de avançar">
                       <input className={inputCls} value={r.nextText ?? ''}
                         onChange={(e) => updateRoom(key, 'nextText', e.target.value)} />
                     </Field>
                   )}
                 </div>
-                <Field label="Descrição">
+                <Field label="Descrição / história do cômodo">
                   <textarea className={textareaCls} rows={2} value={r.desc}
                     onChange={(e) => updateRoom(key, 'desc', e.target.value)} />
                 </Field>
@@ -565,94 +983,121 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
             );
           })}
         </div>
-        <SaveBar saving={roomsSaving} msg={roomsMsg}
-          onSave={() => save(() => saveAdminRooms(rooms), setRS, setRMsg)} />
+        <div className="flex items-center gap-3 pt-1">
+          <SaveBtn saving={roomsState.saving} saved={roomsState.saved}
+            onSave={() => roomsState.run(() => saveAdminRooms(rooms).then(() => onRefresh()))} />
+          <InlineMsg msg={roomsState.msg} />
+        </div>
       </Section>
 
       {/* ── Presentes ── */}
-      <Section title="Lista de presentes">
-        <div className="flex items-center justify-between mb-1">
-          <button
-            onClick={() => setShowInactive((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors"
-          >
+      <Section title="Lista de presentes" count={gifts.filter(g => g.active).length}>
+        {/* Toolbar */}
+        <div className="flex items-center justify-between">
+          <button onClick={() => setShowInactive((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-700 transition-colors">
             {showInactive ? <EyeOff size={13} /> : <Eye size={13} />}
             {showInactive ? 'Ocultar inativos' : 'Mostrar inativos'}
           </button>
           {giftEdit === null && (
             <button onClick={openNewGift}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all">
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#94A684] transition-all">
               <Plus size={13} /> Novo presente
             </button>
           )}
         </div>
 
-        {/* Inline form */}
+        {deleteError && <InlineMsg msg={deleteError} />}
+
+        {/* Formulário inline */}
         <AnimatePresence>
           {giftEdit !== null && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-2">
-              <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50 space-y-3">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  {giftEdit === 'new' ? 'Novo presente' : 'Editar presente'}
+              exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="border border-stone-200 rounded-2xl p-5 bg-stone-50 space-y-5">
+                <p className="text-xs font-black uppercase tracking-widest text-stone-500">
+                  {giftEdit === 'new' ? '+ Novo presente' : '✎ Editar presente'}
                 </p>
-                <div className="grid sm:grid-cols-3 gap-3">
-                  <Field label="Slug (único, sem espaços)">
-                    <input className={inputCls} value={giftForm.slug}
-                      onChange={(e) => setGiftForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/\s/g, '-') }))} />
-                  </Field>
-                  <Field label="Ícone Lucide (emoji_name)">
-                    <input className={inputCls} value={giftForm.emoji_name}
-                      onChange={(e) => setGiftForm((f) => ({ ...f, emoji_name: e.target.value }))} />
-                  </Field>
-                  <Field label="Ordem">
-                    <input className={inputCls} type="number" min="1" value={giftForm.display_order}
-                      onChange={(e) => setGiftForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 0 }))} />
-                  </Field>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-3">
+
+                {/* Linha 1: Título + Subtítulo */}
+                <div className="grid sm:grid-cols-2 gap-4">
                   <Field label="Título *">
-                    <input className={inputCls} value={giftForm.title}
+                    <input className={inputCls} value={giftForm.title} placeholder="A Cafeteira Sagrada"
                       onChange={(e) => setGiftForm((f) => ({ ...f, title: e.target.value }))} />
                   </Field>
                   <Field label="Subtítulo">
-                    <input className={inputCls} value={giftForm.subtitle}
+                    <input className={inputCls} value={giftForm.subtitle} placeholder="O Ritual da Manhã"
                       onChange={(e) => setGiftForm((f) => ({ ...f, subtitle: e.target.value }))} />
                   </Field>
                 </div>
+
+                {/* Linha 2: Descrição */}
                 <Field label="Descrição">
                   <textarea className={textareaCls} rows={2} value={giftForm.description}
+                    placeholder="Nosso dia começa com um café…"
                     onChange={(e) => setGiftForm((f) => ({ ...f, description: e.target.value }))} />
                 </Field>
-                <div className="grid sm:grid-cols-3 gap-3">
-                  <Field label="Valor sugerido (R$)">
-                    <input className={inputCls} type="number" min="0" step="0.01"
+
+                {/* Linha 3: Valor + Tag */}
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <Field label="Valor sugerido (R$)" hint="Deixe vazio para contribuição livre">
+                    <input className={inputCls} type="number" min="0" step="1"
                       value={giftForm.suggested_amount ?? ''}
+                      placeholder="300"
                       onChange={(e) => setGiftForm((f) => ({ ...f, suggested_amount: e.target.value === '' ? null : parseFloat(e.target.value) }))} />
                   </Field>
-                  <Field label="Tag (ex: Missão Urgente)">
-                    <input className={inputCls} value={giftForm.tag}
+                  <Field label="Rótulo da tag">
+                    <input className={inputCls} value={giftForm.tag} placeholder="Essencial"
                       onChange={(e) => setGiftForm((f) => ({ ...f, tag: e.target.value }))} />
                   </Field>
-                  <Field label="Cor da tag (classes Tailwind)">
-                    <input className={inputCls} value={giftForm.tag_color} placeholder="bg-orange-100 text-orange-600"
-                      onChange={(e) => setGiftForm((f) => ({ ...f, tag_color: e.target.value }))} />
+                  <Field label="Slug (ID único)" hint="Sem espaços, letras minúsculas">
+                    <input className={inputCls} value={giftForm.slug} placeholder="cafeteira"
+                      onChange={(e) => setGiftForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') }))} />
                   </Field>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input id="gift-active" type="checkbox" className="rounded" checked={giftForm.active}
-                    onChange={(e) => setGiftForm((f) => ({ ...f, active: e.target.checked }))} />
-                  <label htmlFor="gift-active" className="text-xs font-bold text-slate-500">Ativo (visível no site)</label>
+
+                {/* Seletor de cor */}
+                <TagColorPicker value={giftForm.tag_color}
+                  onChange={(v) => setGiftForm((f) => ({ ...f, tag_color: v }))} />
+
+                {/* Preview da tag */}
+                {giftForm.tag && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-stone-400">Preview:</span>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${giftForm.tag_color}`}>
+                      {giftForm.tag}
+                    </span>
+                  </div>
+                )}
+
+                {/* Seletor de ícone */}
+                <IconPicker value={giftForm.emoji_name}
+                  onChange={(v) => setGiftForm((f) => ({ ...f, emoji_name: v }))} />
+
+                {/* Metadados */}
+                <div className="flex items-center gap-6">
+                  <Field label="Ordem de exibição">
+                    <input className={`${inputCls} w-24`} type="number" min="1"
+                      value={giftForm.display_order}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 0 }))} />
+                  </Field>
+                  <div className="flex items-center gap-2 mt-5">
+                    <input id="gift-active" type="checkbox" className="w-4 h-4 rounded accent-stone-900" checked={giftForm.active}
+                      onChange={(e) => setGiftForm((f) => ({ ...f, active: e.target.checked }))} />
+                    <label htmlFor="gift-active" className="text-sm font-medium text-stone-700">Visível no site</label>
+                  </div>
                 </div>
-                {giftMsg && <p className="text-xs font-bold text-red-500">{giftMsg}</p>}
+
+                {giftMsg && <InlineMsg msg={giftMsg} />}
+
                 <div className="flex gap-2">
                   <button onClick={handleSaveGift} disabled={giftSaving}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all disabled:opacity-50">
-                    <Save size={13} />{giftSaving ? 'Salvando...' : 'Salvar'}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#94A684] transition-all disabled:opacity-50">
+                    <Save size={13} /> {giftSaving ? 'Salvando…' : 'Salvar presente'}
                   </button>
                   <button onClick={() => { setGiftEdit(null); setGiftMsg(''); }}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
-                    <Ban size={13} />Cancelar
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-stone-100 text-stone-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-stone-200 transition-all">
+                    <Ban size={13} /> Cancelar
                   </button>
                 </div>
               </div>
@@ -662,27 +1107,40 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
 
         {/* Lista */}
         {visibleGifts.length === 0 && giftEdit === null && (
-          <p className="text-sm text-slate-400 italic text-center py-4">Nenhum presente cadastrado.</p>
+          <p className="text-sm text-stone-400 italic text-center py-6">Nenhum presente cadastrado.</p>
         )}
         <div className="space-y-2">
           {visibleGifts.map((g) => (
-            <div key={g.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${g.active ? 'border-slate-100 hover:border-slate-200' : 'border-dashed border-slate-200 opacity-50'}`}>
+            <div key={g.id} className={`flex items-center justify-between gap-3 p-3.5 rounded-xl border transition-colors ${
+              g.active ? 'border-stone-100 bg-white hover:border-stone-200' : 'border-dashed border-stone-200 bg-stone-50 opacity-50'
+            }`}>
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-[10px] font-black text-slate-300 w-5 text-center">{g.display_order}</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900 truncate">{g.title}</p>
-                  <p className="text-xs text-slate-400">{g.slug} · {g.suggested_amount != null ? `R$ ${fmt(g.suggested_amount)}` : 'Livre'}{!g.active && ' · inativo'}</p>
+                <span className="text-[10px] font-black text-stone-300 w-5 text-center tabular-nums">{g.display_order}</span>
+                <div className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center text-stone-500 flex-shrink-0">
+                  {ICON_MAP[g.emoji_name] ?? <Gift size={14} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-stone-900 truncate">{g.title}</p>
+                    {g.tag && (
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${g.tag_color}`}>
+                        {g.tag}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-stone-400 mt-0.5">
+                    {g.slug} · {g.suggested_amount != null ? `R$ ${fmt(g.suggested_amount)}` : 'Livre'}
+                    {!g.active && ' · inativo'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button onClick={() => openEditGift(g)} disabled={giftEdit !== null}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-30">
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors disabled:opacity-30"
+                  aria-label="Editar">
                   <Pencil size={13} />
                 </button>
-                <button onClick={() => handleDeleteGift(g.id)} disabled={giftEdit !== null}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30">
-                  <Trash2 size={13} />
-                </button>
+                <DeleteButton onConfirm={() => handleDeleteGift(g.id)} disabled={giftEdit !== null} />
               </div>
             </div>
           ))}
@@ -693,340 +1151,6 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
   );
 });
 SiteTab.displayName = 'SiteTab';
-
-// ── Rifa tab ──────────────────────────────────────────────────────────────────
-
-const EMPTY_PRIZE: Omit<RifaPrize, 'id'> = { title: '', description: '', display_order: 1 };
-
-const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () => Promise<void> }) => {
-  // ── Config ──
-  const [cfg, setCfg]         = useState<RifaConfig>({ ...data.config });
-  const [cfgSaving, setCfgSaving] = useState(false);
-  const [cfgMsg, setCfgMsg]   = useState('');
-
-  // ── Prizes ──
-  const prizes = data.prizes;
-  const [editId, setEditId]   = useState<string | 'new' | null>(null);
-  const [form, setForm]       = useState<Omit<RifaPrize, 'id'>>(EMPTY_PRIZE);
-  const [prizeLoading, setPrizeLoading] = useState(false);
-  const [prizeMsg, setPrizeMsg] = useState('');
-
-  // ── Tickets ──
-  const [ticketsOpen, setTicketsOpen] = useState(false);
-
-  const handleSaveConfig = useCallback(async () => {
-    setCfgSaving(true);
-    setCfgMsg('');
-    try {
-      await saveRifaConfig(cfg);
-      await onRefresh();
-      setCfgMsg('Configuração salva!');
-      setTimeout(() => setCfgMsg(''), 2500);
-    } catch (e) {
-      setCfgMsg((e as Error).message);
-    } finally {
-      setCfgSaving(false);
-    }
-  }, [cfg, onRefresh]);
-
-  const openNew = useCallback(() => {
-    setForm({ ...EMPTY_PRIZE, display_order: prizes.length + 1 });
-    setEditId('new');
-    setPrizeMsg('');
-  }, [prizes.length]);
-
-  const openEdit = useCallback((prize: RifaPrize) => {
-    setForm({ title: prize.title, description: prize.description, display_order: prize.display_order });
-    setEditId(prize.id);
-    setPrizeMsg('');
-  }, []);
-
-  const cancelEdit = useCallback(() => { setEditId(null); setPrizeMsg(''); }, []);
-
-  const handleSavePrize = useCallback(async () => {
-    if (!form.title.trim()) { setPrizeMsg('O título é obrigatório.'); return; }
-    setPrizeLoading(true);
-    setPrizeMsg('');
-    try {
-      if (editId === 'new') {
-        await addRifaPrize(form);
-      } else {
-        await updateRifaPrize(editId!, form);
-      }
-      setEditId(null);
-      await onRefresh();
-    } catch (e) {
-      setPrizeMsg((e as Error).message);
-    } finally {
-      setPrizeLoading(false);
-    }
-  }, [editId, form, onRefresh]);
-
-  const handleDeletePrize = useCallback(async (id: string) => {
-    if (!confirm('Excluir este prêmio?')) return;
-    try {
-      await deleteRifaPrize(id);
-      await onRefresh();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  }, [onRefresh]);
-
-  const { sold, pending, stats } = data.tickets;
-  const drawPct = Math.round(cfg.draw_threshold_pct * 100);
-
-  return (
-    <div className="space-y-6">
-      {/* ── Stats ── */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Vendidos"     value={stats.sold}      icon={<CheckCircle2 size={28} />} accent="border-[#94A684]" sub={`R$ ${fmt(stats.sold * cfg.ticket_price)}`} />
-        <StatCard label="Reservados"   value={stats.pending}   icon={<Ticket size={28} />}        accent="border-[#D6BC9D]" />
-        <StatCard label="Disponíveis"  value={stats.available} icon={<Gift size={28} />}           accent="border-[#8FA9B8]" sub={`de ${cfg.total_tickets} total`} />
-      </div>
-
-      {/* ── Barra de progresso ── */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <div className="flex justify-between mb-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Progresso da venda</p>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{drawPct}% para sorteio</p>
-        </div>
-        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min(100, (stats.sold / Math.max(cfg.total_tickets, 1)) * 100)}%` }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="h-full bg-[#94A684] rounded-full"
-          />
-        </div>
-        <div className="flex justify-between mt-2 text-xs text-slate-400">
-          <span>{stats.sold} vendidos · {stats.pending} pendentes</span>
-          <span>Meta: {Math.ceil(cfg.total_tickets * cfg.draw_threshold_pct)} bilhetes</span>
-        </div>
-      </div>
-
-      {/* ── Configuração ── */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Configuração da Rifa</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <label className="block">
-            <span className="text-xs font-bold text-slate-500 block mb-1">Valor por bilhete (R$)</span>
-            <input
-              type="number" min="1" step="0.01"
-              value={cfg.ticket_price}
-              onChange={(e) => setCfg((c) => ({ ...c, ticket_price: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#94A684] transition-colors"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold text-slate-500 block mb-1">Total de bilhetes</span>
-            <input
-              type="number" min="1" step="1"
-              value={cfg.total_tickets}
-              onChange={(e) => setCfg((c) => ({ ...c, total_tickets: parseInt(e.target.value) || 0 }))}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#94A684] transition-colors"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold text-slate-500 block mb-1">% mínimo para sortear</span>
-            <input
-              type="number" min="1" max="100" step="1"
-              value={Math.round(cfg.draw_threshold_pct * 100)}
-              onChange={(e) => setCfg((c) => ({ ...c, draw_threshold_pct: (parseInt(e.target.value) || 0) / 100 }))}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#94A684] transition-colors"
-            />
-          </label>
-        </div>
-        <div className="flex items-center gap-3 mt-4">
-          <button
-            onClick={handleSaveConfig}
-            disabled={cfgSaving}
-            className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all disabled:opacity-50"
-          >
-            {cfgSaving ? 'Salvando...' : 'Salvar configuração'}
-          </button>
-          {cfgMsg && (
-            <p className={`text-xs font-bold ${cfgMsg.includes('salva') ? 'text-[#94A684]' : 'text-red-500'}`}>{cfgMsg}</p>
-          )}
-        </div>
-      </div>
-
-      {/* ── Prêmios ── */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prêmios</p>
-          {editId === null && (
-            <button
-              onClick={openNew}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all"
-            >
-              <Plus size={13} /> Adicionar
-            </button>
-          )}
-        </div>
-
-        {/* Form (inline) */}
-        <AnimatePresence>
-          {editId !== null && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden mb-4"
-            >
-              <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  {editId === 'new' ? 'Novo prêmio' : 'Editar prêmio'}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div className="sm:col-span-2">
-                    <span className="text-xs font-bold text-slate-500 block mb-1">Título *</span>
-                    <input
-                      value={form.title}
-                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                      placeholder="Ex: 🎁 Kit Churrasco"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:border-[#94A684] transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-500 block mb-1">Ordem</span>
-                    <input
-                      type="number" min="1"
-                      value={form.display_order}
-                      onChange={(e) => setForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 1 }))}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:border-[#94A684] transition-colors"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-500 block mb-1">Descrição</span>
-                  <textarea
-                    rows={2}
-                    value={form.description}
-                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                    placeholder="Detalhes do prêmio..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:border-[#94A684] transition-colors resize-none"
-                  />
-                </div>
-                {prizeMsg && <p className="text-xs font-bold text-red-500">{prizeMsg}</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSavePrize}
-                    disabled={prizeLoading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all disabled:opacity-50"
-                  >
-                    <Save size={13} /> {prizeLoading ? 'Salvando...' : 'Salvar'}
-                  </button>
-                  <button
-                    onClick={cancelEdit}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
-                  >
-                    <Ban size={13} /> Cancelar
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {prizes.length === 0 && editId === null && (
-          <p className="text-sm text-slate-400 italic text-center py-4">Nenhum prêmio cadastrado.</p>
-        )}
-        <div className="space-y-2">
-          {prizes.map((prize) => (
-            <div key={prize.id} className="flex items-start justify-between gap-3 p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black text-slate-300 w-4">{prize.display_order}°</span>
-                  <p className="font-bold text-slate-900 text-sm">{prize.title}</p>
-                </div>
-                {prize.description && (
-                  <p className="text-xs text-slate-400 mt-0.5 ml-6">{prize.description}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  onClick={() => openEdit(prize)}
-                  disabled={editId !== null}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-30"
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  onClick={() => handleDeletePrize(prize.id)}
-                  disabled={editId !== null}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Bilhetes ── */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm">
-        <button
-          onClick={() => setTicketsOpen((o) => !o)}
-          className="w-full flex items-center justify-between"
-        >
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Bilhetes vendidos e reservados ({sold.length + pending.length})
-          </p>
-          {ticketsOpen ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-        </button>
-        <AnimatePresence>
-          {ticketsOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-4 space-y-2">
-                {[...sold, ...pending]
-                  .sort((a, b) => a.ticket_number - b.ticket_number)
-                  .map((t) => (
-                    <div key={t.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-black text-slate-900 w-10 text-center bg-slate-100 rounded-lg py-0.5">
-                          #{t.ticket_number}
-                        </span>
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">{t.buyer_name ?? <span className="italic font-normal text-slate-400">—</span>}</p>
-                          <p className="text-xs text-slate-400">{t.buyer_email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="text-xs font-black text-slate-500">R$ {fmt(t.amount)}</span>
-                        <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                          t.payment_status === 'approved'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {t.payment_status === 'approved' ? 'Pago' : 'Pendente'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                {sold.length === 0 && pending.length === 0 && (
-                  <p className="text-sm text-slate-400 italic text-center py-4">Nenhum bilhete vendido ainda.</p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="flex justify-end">
-        <button onClick={onRefresh} className="text-xs text-slate-400 hover:text-slate-700 underline underline-offset-2 transition-colors">
-          Recarregar dados da rifa
-        </button>
-      </div>
-    </div>
-  );
-});
-RifaTab.displayName = 'RifaTab';
 
 // ── AdminPanel (main export) ──────────────────────────────────────────────────
 
@@ -1039,12 +1163,13 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
   const [tab, setTab] = useState<Tab>('overview');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [rsvp, setRsvp] = useState<RsvpResponse[]>([]);
-  const [summaries, setSummaries] = useState<GiftSummary[]>([]);
+
+  const [stats, setStats]             = useState<DashboardStats | null>(null);
+  const [rsvp, setRsvp]               = useState<RsvpResponse[]>([]);
+  const [summaries, setSummaries]     = useState<GiftSummary[]>([]);
   const [contributions, setContributions] = useState<GiftContribution[]>([]);
-  const [rifaData, setRifaData] = useState<AdminRifaData | null>(null);
-  const [siteData, setSiteData] = useState<AdminSiteData | null>(null);
+  const [rifaData, setRifaData]       = useState<AdminRifaData | null>(null);
+  const [siteData, setSiteData]       = useState<AdminSiteData | null>(null);
 
   const refreshRifa = useCallback(async () => {
     const rifa = await fetchAdminRifa();
@@ -1057,23 +1182,14 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
   }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError('');
+    setLoading(true); setLoadError('');
     try {
       const [s, r, gs, gc, rifa, site] = await Promise.all([
-        fetchDashboardStats(),
-        fetchRsvpResponses(),
-        fetchGiftSummary(),
-        fetchGiftContributions(),
-        fetchAdminRifa(),
-        fetchAdminSite(),
+        fetchDashboardStats(), fetchRsvpResponses(), fetchGiftSummary(),
+        fetchGiftContributions(), fetchAdminRifa(), fetchAdminSite(),
       ]);
-      setStats(s);
-      setRsvp(r);
-      setSummaries(gs);
-      setContributions(gc);
-      setRifaData(rifa);
-      setSiteData(site);
+      setStats(s); setRsvp(r); setSummaries(gs); setContributions(gc);
+      setRifaData(rifa); setSiteData(site);
     } catch (e) {
       setLoadError((e as Error).message);
     } finally {
@@ -1084,11 +1200,11 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
   useEffect(() => { load(); }, [load]);
 
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview', label: 'Visão Geral',  icon: <TrendingUp size={16} /> },
-    { id: 'rsvp',     label: 'Presenças',    icon: <Users size={16} /> },
-    { id: 'gifts',    label: 'Presentes',    icon: <Gift size={16} /> },
-    { id: 'rifa',     label: 'Rifa',         icon: <Ticket size={16} /> },
-    { id: 'site',     label: 'Editar Site',  icon: <Settings size={16} /> },
+    { id: 'overview', label: 'Visão Geral', icon: <TrendingUp size={15} /> },
+    { id: 'rsvp',     label: 'Presenças',   icon: <Users size={15} /> },
+    { id: 'gifts',    label: 'Presentes',   icon: <Gift size={15} /> },
+    { id: 'rifa',     label: 'Rifa',        icon: <Ticket size={15} /> },
+    { id: 'site',     label: 'Editar Site', icon: <Settings size={15} /> },
   ];
 
   return (
@@ -1100,89 +1216,82 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
       style={{ backgroundColor: '#F2F1EC' }}
     >
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#F2F1EC]/90 backdrop-blur-xl border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-5 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-[#F2F1EC]/95 backdrop-blur-xl border-b border-stone-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#94A684]">Painel Privado</p>
-            <h1 className="text-xl font-serif text-slate-900">Larissa &amp; Alvaro</h1>
+            <p className="text-[9px] font-black uppercase tracking-[0.5em] text-[#94A684]">Painel Privado</p>
+            <h1 className="text-lg font-serif text-stone-900 leading-tight">Larissa &amp; Alvaro</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={load}
-              disabled={loading}
-              className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 border border-slate-100 transition-colors shadow-sm disabled:opacity-40"
-              title="Recarregar"
-            >
-              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          <div className="flex items-center gap-1.5">
+            <button onClick={load} disabled={loading} aria-label="Recarregar"
+              className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-stone-400 hover:text-stone-900 border border-stone-200 shadow-sm transition-colors disabled:opacity-40">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
             {onLogout && (
-              <button
-                onClick={onLogout}
-                className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 border border-slate-100 transition-colors shadow-sm"
-                title="Sair"
-              >
-                <LogOut size={15} />
+              <button onClick={onLogout} aria-label="Sair"
+                className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-stone-400 hover:text-red-500 border border-stone-200 shadow-sm transition-colors">
+                <LogOut size={14} />
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 border border-slate-100 transition-colors shadow-sm"
-              title="Voltar ao site"
-            >
-              <X size={15} />
+            <button onClick={onClose} aria-label="Voltar ao site"
+              className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-stone-400 hover:text-stone-900 border border-stone-200 shadow-sm transition-colors">
+              <X size={14} />
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="max-w-4xl mx-auto px-5 flex gap-1 pb-3">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                tab === t.id
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-white'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
+        {/* Tabs — scroll horizontal em mobile */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 overflow-x-auto">
+          <div className="flex gap-1 pb-3 min-w-max sm:min-w-0">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  tab === t.id
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-500 hover:text-stone-900 hover:bg-stone-100'
+                }`}
+              >
+                {t.icon}
+                <span className={tab === t.id ? '' : 'hidden sm:inline'}>{t.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-5 py-8 pb-20">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 pb-24">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <RefreshCw size={24} className="animate-spin text-slate-300" />
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <RefreshCw size={22} className="animate-spin text-stone-300" />
+            <p className="text-sm text-stone-400">Carregando painel…</p>
           </div>
         ) : loadError ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <p className="text-sm font-bold text-red-500 text-center max-w-sm">{loadError}</p>
-            <button
-              onClick={load}
-              className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#94A684] transition-all"
-            >
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+              <AlertCircle size={22} className="text-red-400" />
+            </div>
+            <p className="text-sm font-semibold text-red-500 text-center max-w-sm">{loadError}</p>
+            <button onClick={load}
+              className="px-5 py-2.5 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#94A684] transition-all">
               Tentar novamente
             </button>
           </div>
         ) : (
           <AnimatePresence mode="wait">
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: 8 }}
+            <motion.div key={tab}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
+              exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.15 }}
             >
               {tab === 'overview' && stats && <OverviewTab stats={stats} />}
-              {tab === 'rsvp' && <RsvpTab responses={rsvp} />}
-              {tab === 'gifts' && <GiftsTab summaries={summaries} contributions={contributions} />}
-              {tab === 'rifa' && rifaData && <RifaTab data={rifaData} onRefresh={refreshRifa} />}
-              {tab === 'site' && siteData && <SiteTab data={siteData} onRefresh={refreshSite} />}
+              {tab === 'rsvp'     && <RsvpTab responses={rsvp} />}
+              {tab === 'gifts'    && <GiftsTab summaries={summaries} contributions={contributions} />}
+              {tab === 'rifa'     && rifaData && <RifaTab data={rifaData} onRefresh={refreshRifa} />}
+              {tab === 'site'     && siteData && <SiteTab data={siteData} onRefresh={refreshSite} />}
             </motion.div>
           </AnimatePresence>
         )}
