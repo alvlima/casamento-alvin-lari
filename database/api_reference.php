@@ -922,14 +922,16 @@ function handle_rifa_pay_card(PDO $db): void
         'external_reference'   => $external_ref,
         'notification_url'     => MP_WEBHOOK_URL,
         'capture'              => true,
-        'items'                => [[
-            'id'          => 'rifa-bilhete',
-            'title'       => $description,
-            'description' => $description,
-            'category_id' => 'tickets',
-            'quantity'    => $count,
-            'unit_price'  => $unit_price,
-        ]],
+        'additional_info'      => [
+            'items' => [[
+                'id'          => 'rifa-bilhete',
+                'title'       => $description,
+                'description' => $description,
+                'category_id' => 'tickets',
+                'quantity'    => $count,
+                'unit_price'  => $unit_price,
+            ]],
+        ],
     ];
     if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
@@ -1023,14 +1025,16 @@ function handle_gifts_pay_card(PDO $db): void
         'external_reference'   => $external_ref,
         'notification_url'     => MP_WEBHOOK_URL,
         'capture'              => true,
-        'items'                => [[
-            'id'          => $gift_item_id ?? 'presente-livre',
-            'title'       => "Presente: {$gift_title}",
-            'description' => $gift_description,
-            'category_id' => 'home_and_garden',
-            'quantity'    => 1,
-            'unit_price'  => round($amount, 2),
-        ]],
+        'additional_info'      => [
+            'items' => [[
+                'id'          => $gift_item_id ?? 'presente-livre',
+                'title'       => "Presente: {$gift_title}",
+                'description' => $gift_description,
+                'category_id' => 'home_and_garden',
+                'quantity'    => 1,
+                'unit_price'  => round($amount, 2),
+            ]],
+        ],
     ];
     if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
