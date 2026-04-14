@@ -163,9 +163,9 @@ elseif  ($method === 'GET'    && $path === '/admin/rifa')          handle_admin_
 elseif  ($method === 'POST'   && $path === '/admin/rifa/config')   handle_admin_save_rifa_config($db);
 elseif  ($method === 'POST'   && $path === '/admin/rifa/prizes')   handle_admin_add_prize($db);
 elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/rifa/prizes/'))
-                                                                   handle_admin_update_prize($db, substr($path, 21));
+                                                                   handle_admin_update_prize($db, substr($path, 19));
 elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/rifa/prizes/'))
-                                                                   handle_admin_delete_prize($db, substr($path, 21));
+                                                                   handle_admin_delete_prize($db, substr($path, 19));
 elseif  ($method === 'GET'    && $path === '/admin/site')          handle_admin_get_site($db);
 elseif  ($method === 'POST'   && $path === '/admin/site/couple')   handle_admin_save_couple($db);
 elseif  ($method === 'POST'   && $path === '/admin/site/content')  handle_admin_save_content($db);
@@ -173,9 +173,9 @@ elseif  ($method === 'POST'   && $path === '/admin/site/rooms')    handle_admin_
 elseif  ($method === 'GET'    && $path === '/admin/gifts')         handle_admin_get_gifts($db);
 elseif  ($method === 'POST'   && $path === '/admin/gifts')         handle_admin_add_gift($db);
 elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/gifts/'))
-                                                                   handle_admin_update_gift($db, substr($path, 14));
+                                                                   handle_admin_update_gift($db, substr($path, 13));
 elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/gifts/'))
-                                                                   handle_admin_delete_gift($db, substr($path, 14));
+                                                                   handle_admin_delete_gift($db, substr($path, 13));
 else    { http_response_code(404); echo json_encode(['error' => 'Rota não encontrada.']); }
 
 

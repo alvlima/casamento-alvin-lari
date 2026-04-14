@@ -182,7 +182,7 @@ const PayModal = memo(({ gift, onClose }: PayModalProps) => {
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Escolha como pagar</p>
               <button onClick={handlePix} disabled={!isFormValid}
                 className="w-full py-4 bg-[#94A684] text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-[#7d9270] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
-                <QrCode size={16} />Pix — QR Code instantâneo
+                <QrCode size={16} />Pix
               </button>
               <button onClick={handleGoToCard} disabled={!isFormValid}
                 className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
