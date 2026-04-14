@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import MainSite from './pages/MainSite';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Rotas lazy — zero peso para quem não acessa
 const AdminLoginPage = lazy(() => import('./pages/AdminLoginPage'));
@@ -10,10 +9,7 @@ const RifaPage       = lazy(() => import('./pages/RifaPage'));
 export default function App() {
   return (
     <Routes>
-      {/* Site principal do casamento */}
-      <Route path="/" element={<MainSite />} />
-
-      {/* Rifa do Chá de Casa Nova — rota isolada, sem navegação para outros lugares */}
+      {/* Rifa do Chá de Casa Nova */}
       <Route
         path="/rifa"
         element={
@@ -40,6 +36,9 @@ export default function App() {
           </Suspense>
         }
       />
+
+      {/* Qualquer outra rota → /rifa */}
+      <Route path="*" element={<Navigate to="/rifa" replace />} />
     </Routes>
   );
 }

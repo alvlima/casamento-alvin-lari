@@ -891,16 +891,31 @@ function handle_rifa_pay_card(PDO $db): void
         $description = "{$count} Bilhetes (#$nums) — Rifa Chá de Casa Nova";
     }
 
+    $unit_price = $count > 0 ? round($total_amount / $count, 2) : $total_amount;
     $payload = [
-        'transaction_amount' => $total_amount,
-        'token'              => $token,
-        'description'        => $description,
-        'installments'       => $installments,
-        'payment_method_id'  => $payment_method_id,
-        'payer'              => ['email' => $payer_email],
-        'external_reference' => $external_ref,
-        'notification_url'   => MP_WEBHOOK_URL,
-        'capture'            => true,
+        'transaction_amount'   => $total_amount,
+        'token'                => $token,
+        'description'          => $description,
+        'installments'         => $installments,
+        'payment_method_id'    => $payment_method_id,
+        'statement_descriptor' => 'ALVIN E LARI',
+        'payer'                => [
+            'email'      => $payer_email,
+            'first_name' => explode(' ', trim($name))[0],
+        ],
+        'external_reference'   => $external_ref,
+        'notification_url'     => MP_WEBHOOK_URL,
+        'capture'              => true,
+        'items'                => [[
+            'id'          => 'rifa-bilhete',
+            'title'       => $count === 1
+                                ? sprintf('Bilhete #%03d — Rifa Chá de Casa Nova', $tickets[0])
+                                : "Bilhete Rifa — Chá de Casa Nova",
+            'description' => $description,
+            'category_id' => 'tickets',
+            'quantity'    => $count,
+            'unit_price'  => $unit_price,
+        ]],
     ];
     if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
@@ -976,16 +991,29 @@ function handle_gifts_pay_card(PDO $db): void
          VALUES (?, ?, ?, ?, ?, ?, ?, 'credit_card', 'pending')"
     )->execute([$contribution_id, $couple_id, $gift_item_id, $gift_title, $amount, $name, $payer_email]);
 
+    $gift_description = "Presente: {$gift_title}";
     $payload = [
-        'transaction_amount' => round($amount, 2),
-        'token'              => $token,
-        'description'        => "Presente: {$gift_title}",
-        'installments'       => $installments,
-        'payment_method_id'  => $payment_method_id,
-        'payer'              => ['email' => $payer_email],
-        'external_reference' => $external_ref,
-        'notification_url'   => MP_WEBHOOK_URL,
-        'capture'            => true,
+        'transaction_amount'   => round($amount, 2),
+        'token'                => $token,
+        'description'          => $gift_description,
+        'installments'         => $installments,
+        'payment_method_id'    => $payment_method_id,
+        'statement_descriptor' => 'ALVIN E LARI',
+        'payer'                => [
+            'email'      => $payer_email,
+            'first_name' => $name ? explode(' ', trim($name))[0] : null,
+        ],
+        'external_reference'   => $external_ref,
+        'notification_url'     => MP_WEBHOOK_URL,
+        'capture'              => true,
+        'items'                => [[
+            'id'          => $gift_item_id ?? 'presente-livre',
+            'title'       => "Presente: {$gift_title}",
+            'description' => $gift_description,
+            'category_id' => 'home_and_garden',
+            'quantity'    => 1,
+            'unit_price'  => round($amount, 2),
+        ]],
     ];
     if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
