@@ -66,13 +66,14 @@ interface BuyModalProps {
 }
 
 const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, onClose, onReserved, onSold }: BuyModalProps) => {
-  const [step,    setStep]    = useState<ModalStep>('form');
-  const [name,    setName]    = useState('');
-  const [email,   setEmail]   = useState('');
-  const [phone,   setPhone]   = useState('');
-  const [error,   setError]   = useState('');
-  const [pixData, setPixData] = useState<PixResult | null>(null);
-  const [copied,  setCopied]  = useState(false);
+  const [step,         setStep]         = useState<ModalStep>('form');
+  const [name,         setName]         = useState('');
+  const [email,        setEmail]        = useState('');
+  const [phone,        setPhone]        = useState('');
+  const [error,        setError]        = useState('');
+  const [pixData,      setPixData]      = useState<PixResult | null>(null);
+  const [copied,       setCopied]       = useState(false);
+  const [cardApproved, setCardApproved] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const count      = numbers.length;
@@ -117,15 +118,22 @@ const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, o
     try {
       const result = await processRifaCardPayment({ ...formData, ticket_numbers: numbers, buyer_name: name.trim() });
       if (result.status === 'approved') {
-        onSold(numbers);      // marca como vendido imediatamente na grade
+        onSold(numbers);
+        setCardApproved(true);
+        setStep('card_done');
+      } else if (result.status === 'pending') {
+        // Pagamento em análise — reserva confirmada, aguarda webhook
+        onReserved(numbers);
+        setCardApproved(false);
+        setStep('card_done');
       } else {
-        onReserved(numbers);  // status pending — aguarda confirmação
+        // Status inesperado: não marca nada, mostra erro
+        setError('Pagamento não confirmado. Verifique com seu banco e tente novamente.');
+        throw new Error('status inesperado');
       }
-      setStep('card_done');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Pagamento recusado. Tente outro cartão.';
       setError(msg);
-      // Fica no card_form para o usuário corrigir e tentar de novo sem re-digitar tudo
       throw new Error(msg);
     }
   }, [numbers, name, onReserved, onSold]);
@@ -331,17 +339,25 @@ const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, o
             <div className="py-4 space-y-4 text-center">
               <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 20 }}>
-                <CheckCircle2 size={56} className="mx-auto text-[#94A684]" />
+                <CheckCircle2 size={56} className={`mx-auto ${cardApproved ? 'text-[#94A684]' : 'text-amber-400'}`} />
               </motion.div>
               <div>
-                <p className="text-xl font-black text-slate-900">Pagamento aprovado!</p>
+                <p className="text-xl font-black text-slate-900">
+                  {cardApproved ? 'Pagamento aprovado!' : 'Pagamento em análise'}
+                </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  {count === 1
-                    ? <>Bilhete <strong>{ticketList}</strong> confirmado no seu nome.</>
-                    : <><strong>{count} bilhetes</strong> ({ticketList}) confirmados no seu nome.</>
+                  {cardApproved
+                    ? (count === 1
+                        ? <>Bilhete <strong>{ticketList}</strong> confirmado no seu nome.</>
+                        : <><strong>{count} bilhetes</strong> ({ticketList}) confirmados no seu nome.</>)
+                    : (count === 1
+                        ? <>Bilhete <strong>{ticketList}</strong> reservado. Confirmaremos por e-mail.</>
+                        : <><strong>{count} bilhetes</strong> ({ticketList}) reservados. Confirmaremos por e-mail.</>)
                   }
                 </p>
-                <p className="text-xs text-slate-400 mt-2">Comprovante enviado para <strong>{email}</strong></p>
+                <p className="text-xs text-slate-400 mt-2">
+                  {cardApproved ? 'Comprovante enviado para' : 'Acompanhe em'} <strong>{email}</strong>
+                </p>
               </div>
               <button onClick={onClose}
                 className="w-full py-4 bg-[#94A684] text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-[#7d9270] transition-all">
@@ -506,9 +522,10 @@ export default function RifaPage() {
     setSelectedTickets(new Set());
   }, []);
   const handleSold = useCallback((ns: number[]) => {
-    // Cartão aprovado: move direto para vendido sem esperar o polling
+    // Cartão aprovado: move direto para vendido sem esperar o polling.
+    // NÃO limpa selectedTickets aqui — o modal precisa ficar aberto para mostrar
+    // o card_done. handleClose vai limpar quando o usuário clicar em "Fechar".
     setSoldTickets((prev) => new Set([...prev, ...ns]));
-    setSelectedTickets(new Set());
   }, []);
   const handleReserved = useCallback((ns: number[]) => {
     // Marca como pendente na grade mas NÃO fecha o modal —
