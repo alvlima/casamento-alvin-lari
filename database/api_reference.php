@@ -327,10 +327,21 @@ function mp_request(string $method, string $path, array $data = [], string $idem
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     unset($ch); // curl_close() depreciado no PHP 8.5
 
-    if (!$body || $status >= 500) {
-        throw new RuntimeException("Mercado Pago indisponível (HTTP {$status}).");
+    if (!$body) {
+        throw new RuntimeException("Mercado Pago sem resposta (HTTP {$status}).");
     }
-    return json_decode($body, true, 512, JSON_BIGINT_AS_STRING) ?: [];
+
+    $decoded = json_decode($body, true, 512, JSON_BIGINT_AS_STRING) ?: [];
+
+    // 4xx = erro de credencial, token inválido, payload malformado etc.
+    // Jogamos exceção para que o chamador cancele os tickets em vez de gravar 'pending' silenciosamente.
+    if ($status < 200 || $status >= 300) {
+        $errMsg = $decoded['message'] ?? $decoded['error'] ?? "HTTP {$status}";
+        error_log("[MP] Erro na chamada {$path}: {$errMsg} (HTTP {$status}) body={$body}");
+        throw new RuntimeException("Mercado Pago retornou erro: {$errMsg} (HTTP {$status}).");
+    }
+
+    return $decoded;
 }
 
 /**
@@ -913,9 +924,7 @@ function handle_rifa_pay_card(PDO $db): void
         'capture'              => true,
         'items'                => [[
             'id'          => 'rifa-bilhete',
-            'title'       => $count === 1
-                                ? sprintf('Bilhete #%03d — Rifa Chá de Casa Nova', $tickets[0])
-                                : "Bilhete Rifa — Chá de Casa Nova",
+            'title'       => $description,
             'description' => $description,
             'category_id' => 'tickets',
             'quantity'    => $count,
