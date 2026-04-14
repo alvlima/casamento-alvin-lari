@@ -282,10 +282,18 @@ const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, o
 
               {IS_MP_READY ? (
                 <CardPayment
+                  key={`card-${numbers.join('-')}`}
                   initialization={{ amount: total, payer: { email: email.trim() } }}
                   customization={MP_BRICK_CUSTOMIZATION}
                   onSubmit={handleCardSubmit as Parameters<typeof CardPayment>[0]['onSubmit']}
-                  onError={(err) => { setError(String(err?.message ?? 'Erro no formulário de cartão.')); setStep('form'); }}
+                  onError={(err) => {
+                    const raw = String(err?.message ?? '');
+                    const msg = raw.toLowerCase().includes('secure fields') || raw.toLowerCase().includes('integration')
+                      ? 'Erro ao carregar o formulário de cartão. Verifique sua conexão e tente novamente.'
+                      : (raw || 'Erro no formulário de cartão.');
+                    setError(msg);
+                    setStep('form');
+                  }}
                 />
               ) : (
                 <div className="bg-slate-50 rounded-2xl p-6 border-2 border-dashed border-slate-200 text-center space-y-4">
@@ -432,6 +440,9 @@ export default function RifaPage() {
       desc:  ['Primeiro lugar leva R$ 250 no bolso — gaste como quiser!', 'Segundo lugar garante R$ 150 para usar como preferir.', 'Terceiro lugar recebe R$ 80 para celebrar junto com a gente!'][i],
     }))
   );
+
+  // Inicializa o SDK do MP cedo para ter tempo de carregar antes do Brick ser montado
+  useEffect(() => { ensureMPInitialized(); }, []);
 
   // Carga inicial — config + bilhetes em paralelo
   useEffect(() => {
