@@ -433,6 +433,7 @@ export default function RifaPage() {
     }))
   );
 
+  // Carga inicial — config + bilhetes em paralelo
   useEffect(() => {
     Promise.all([fetchRaffleTickets(), fetchWeddingConfig()])
       .then(([{ sold, pending }, cfg]) => {
@@ -454,6 +455,19 @@ export default function RifaPage() {
       .finally(() => setLoadingTickets(false));
   }, []);
 
+  // Polling a cada 30s — reflete pagamentos confirmados via webhook do MP
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchRaffleTickets()
+        .then(({ sold, pending }) => {
+          setSoldTickets(sold);
+          setPendingTickets(pending);
+        })
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const handleSelect = useCallback((n: number) => {
     setSelectedTickets((prev) => {
       const next = new Set(prev);
@@ -461,11 +475,15 @@ export default function RifaPage() {
       return next;
     });
   }, []);
-  const handleClose    = useCallback(() => setModalOpen(false), []);
-  const handleReserved = useCallback((ns: number[]) => {
-    setPendingTickets((prev) => new Set([...prev, ...ns]));
-    setSelectedTickets(new Set());
+  const handleClose = useCallback(() => {
     setModalOpen(false);
+    setSelectedTickets(new Set());
+  }, []);
+  const handleReserved = useCallback((ns: number[]) => {
+    // Marca como pendente na grade mas NÃO fecha o modal —
+    // PIX precisa manter o modal aberto para mostrar o QR code.
+    // O modal fecha quando o usuário clica em "Fechar".
+    setPendingTickets((prev) => new Set([...prev, ...ns]));
   }, []);
   const dismissBanner = useCallback(() => {
     setSearchParams((p) => { p.delete('payment'); return p; });
