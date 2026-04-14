@@ -79,6 +79,7 @@ export interface RifaTicketDetail {
   buyer_name:     string | null;
   buyer_email:    string;
   buyer_phone:    string | null;
+  payment_method: 'pix' | 'credit_card' | null;
   payment_status: 'approved' | 'pending';
   amount:         number;
   created_at:     string;
