@@ -657,7 +657,7 @@ export default function RifaPage() {
         {/* Rodapé */}
         <div className="flex items-center justify-center gap-2 pb-6 text-slate-400">
           <Heart size={12} fill="currentColor" className="text-[#E8C9B5]" />
-          <p className="text-xs italic">AP Patinhas — Chá de Casa Nova 2026</p>
+          <p className="text-xs italic">Chá de Casa Nova 2026</p>
           <Sparkles size={12} className="text-[#D6BC9D]" />
         </div>
       </div>
