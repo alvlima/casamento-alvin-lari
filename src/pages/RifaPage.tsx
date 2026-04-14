@@ -61,10 +61,11 @@ interface BuyModalProps {
   drawPct:     number;
   soldCount:   number;
   onClose:     () => void;
-  onReserved:  (ns: number[]) => void;
+  onReserved:  (ns: number[]) => void;   // PIX: reservado, aguarda webhook
+  onSold:      (ns: number[]) => void;   // Cartão aprovado: vendido imediatamente
 }
 
-const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, onClose, onReserved }: BuyModalProps) => {
+const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, onClose, onReserved, onSold }: BuyModalProps) => {
   const [step,    setStep]    = useState<ModalStep>('form');
   const [name,    setName]    = useState('');
   const [email,   setEmail]   = useState('');
@@ -112,17 +113,22 @@ const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, o
   }, [isFormValid]);
 
   const handleCardSubmit = useCallback(async (formData: CardPaymentInput) => {
+    setError('');
     try {
-      await processRifaCardPayment({ ...formData, ticket_numbers: numbers, buyer_name: name.trim() });
-      onReserved(numbers);
+      const result = await processRifaCardPayment({ ...formData, ticket_numbers: numbers, buyer_name: name.trim() });
+      if (result.status === 'approved') {
+        onSold(numbers);      // marca como vendido imediatamente na grade
+      } else {
+        onReserved(numbers);  // status pending — aguarda confirmação
+      }
       setStep('card_done');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Pagamento recusado. Tente outro cartão.';
       setError(msg);
-      setStep('form');
+      // Fica no card_form para o usuário corrigir e tentar de novo sem re-digitar tudo
       throw new Error(msg);
     }
-  }, [numbers, name, onReserved]);
+  }, [numbers, name, onReserved, onSold]);
 
   const handleCopyCode = useCallback(() => {
     if (!pixData?.qr_code) return;
@@ -273,12 +279,19 @@ const BuyModal = memo(({ numbers, ticketPrice, drawTarget, drawPct, soldCount, o
           {step === 'card_form' && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
-                <button onClick={() => setStep('form')}
+                <button onClick={() => { setError(''); setStep('form'); }}
                   className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors flex-shrink-0" title="Voltar">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
                 </button>
                 <p className="text-sm font-bold text-slate-700">Dados do cartão</p>
               </div>
+
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+                  <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-600 font-medium">{error}</p>
+                </div>
+              )}
 
               {IS_MP_READY ? (
                 <CardPayment
@@ -490,6 +503,11 @@ export default function RifaPage() {
   }, []);
   const handleClose = useCallback(() => {
     setModalOpen(false);
+    setSelectedTickets(new Set());
+  }, []);
+  const handleSold = useCallback((ns: number[]) => {
+    // Cartão aprovado: move direto para vendido sem esperar o polling
+    setSoldTickets((prev) => new Set([...prev, ...ns]));
     setSelectedTickets(new Set());
   }, []);
   const handleReserved = useCallback((ns: number[]) => {
@@ -706,6 +724,7 @@ export default function RifaPage() {
             soldCount={soldTickets.size}
             onClose={handleClose}
             onReserved={handleReserved}
+            onSold={handleSold}
           />
         )}
       </AnimatePresence>
