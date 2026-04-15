@@ -54,10 +54,9 @@ function fmtDate(iso: string) {
 }
 
 // Taxas MP conforme tabela de tarifas vigente
-// Crédito: 3,03% à vista · 3,60% 2-12x (sem parcelas salvas, usamos 3,60% como estimativa)
-const MP_FEE: Record<string, number> = { pix: 0, credit_card: 0.036 };
+const MP_FEE: Record<string, number> = { pix: 0.01, credit_card: 0.0398 };
 function netValue(amount: number, method: string | null) {
-  const fee = MP_FEE[method ?? ''] ?? 0.036;
+  const fee = MP_FEE[method ?? ''] ?? 0.0398;
   return amount * (1 - fee);
 }
 
@@ -327,7 +326,7 @@ function Section({ title, children, defaultOpen = false, count }: {
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 
-const OverviewTab = memo(({ stats }: { stats: DashboardStats }) => (
+const OverviewTab = memo(({ stats, onNavigate }: { stats: DashboardStats; onNavigate: (tab: Tab) => void }) => (
   <div className="space-y-6">
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <StatCard
@@ -371,6 +370,31 @@ const OverviewTab = memo(({ stats }: { stats: DashboardStats }) => (
       <div className="flex justify-between mt-2 text-xs text-stone-400">
         <span>{stats.confirmed} confirmados</span>
         <span>{stats.declined} declinaram</span>
+      </div>
+    </div>
+
+    {/* Acesso rápido */}
+    <div>
+      <p className={`${labelCls} mb-3`}>Acesso rápido</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {([
+          { tab: 'rsvp'  as Tab, icon: <Users size={20} />,    label: 'Presenças',   stat: `${stats.confirmed} confirmados`,            color: 'text-[#94A684]', bg: 'bg-[#94A684]/8 hover:bg-[#94A684]/15 border-[#94A684]/20' },
+          { tab: 'gifts' as Tab, icon: <Gift size={20} />,     label: 'Presentes',   stat: `R$ ${fmt(stats.total_gift_amount)}`,         color: 'text-[#8FA9B8]', bg: 'bg-[#8FA9B8]/8 hover:bg-[#8FA9B8]/15 border-[#8FA9B8]/20' },
+          { tab: 'rifa'  as Tab, icon: <Ticket size={20} />,   label: 'Rifa',        stat: 'Bilhetes e sorteio',                        color: 'text-[#D6BC9D]', bg: 'bg-[#D6BC9D]/8 hover:bg-[#D6BC9D]/15 border-[#D6BC9D]/20' },
+          { tab: 'site'  as Tab, icon: <Settings size={20} />, label: 'Editar Site', stat: 'Textos e conteúdo',                          color: 'text-stone-500',  bg: 'bg-stone-50 hover:bg-stone-100 border-stone-200' },
+        ] as const).map(({ tab, icon, label, stat, color, bg }) => (
+          <button
+            key={tab}
+            onClick={() => onNavigate(tab)}
+            className={`flex flex-col items-start gap-2 p-4 rounded-2xl border transition-all text-left ${bg}`}
+          >
+            <span className={color}>{icon}</span>
+            <div>
+              <p className="text-sm font-bold text-stone-800">{label}</p>
+              <p className="text-xs text-stone-400 mt-0.5">{stat}</p>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   </div>
@@ -800,7 +824,7 @@ const RifaTab = memo(({ data, onRefresh }: { data: AdminRifaData; onRefresh: () 
                       <div className="text-right">
                         <p className="text-xs font-bold text-stone-700">R$ {fmt(t.amount)}</p>
                         {t.payment_status === 'approved' && (
-                          <p className="text-[10px] text-stone-400" title={t.payment_method === 'pix' ? 'Pix: 0% de taxa' : 'Cartão: estimativa com taxa de 3,60%'}>
+                          <p className="text-[10px] text-stone-400" title={t.payment_method === 'pix' ? 'Pix: 1% de taxa' : 'Cartão: 3,98% de taxa'}>
                             liq. R$ {fmt(netValue(t.amount, t.payment_method))}
                           </p>
                         )}
@@ -1318,7 +1342,7 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.15 }}
             >
-              {tab === 'overview' && stats && <OverviewTab stats={stats} />}
+              {tab === 'overview' && stats && <OverviewTab stats={stats} onNavigate={setTab} />}
               {tab === 'rsvp'     && <RsvpTab responses={rsvp} />}
               {tab === 'gifts'    && <GiftsTab summaries={summaries} contributions={contributions} />}
               {tab === 'rifa'     && rifaData && <RifaTab data={rifaData} onRefresh={refreshRifa} />}
