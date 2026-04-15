@@ -98,7 +98,7 @@ define('MASTER_API_KEY',    getenv('MASTER_API_KEY')   ?: '');
 define('MP_ACCESS_TOKEN',   getenv('MP_ACCESS_TOKEN')  ?: '');
 define('MP_WEBHOOK_SECRET', getenv('MP_WEBHOOK_SECRET') ?: '');
 define('SITE_URL',          rtrim(getenv('SITE_URL') ?: 'https://seudomain.com.br', '/'));
-define('MP_WEBHOOK_URL',    SITE_URL . '/api/payments/webhook');
+define('MP_WEBHOOK_URL',    SITE_URL . '/database/payments/webhook');
 define('MP_SANDBOX',        getenv('MP_SANDBOX') === 'true');
 
 // ═══ BOOTSTRAP ═════════════════════════════════════════════════════════════════
@@ -781,18 +781,26 @@ function handle_mp_webhook(PDO $db): void
         $new_status   = map_mp_status($mp_status);
         $external_ref = $payment['external_reference'] ?? '';
 
+        error_log("[MP Webhook] payment_id={$payment_id} mp_status={$mp_status} new_status={$new_status} ref={$external_ref}");
+
         if (str_starts_with($external_ref, 'rifa-group-')) {
             // Multi-bilhete: atualiza todos os rows pelo mp_payment_id
-            $db->prepare(
-                "UPDATE raffle_tickets SET payment_status = ?, updated_at = NOW() WHERE mp_payment_id = ?"
-            )->execute([$new_status, $payment_id]);
+            $expires_sql = $new_status === 'approved' ? ', expires_at = NULL' : '';
+            $stmt = $db->prepare(
+                "UPDATE raffle_tickets SET payment_status = ?, updated_at = NOW(){$expires_sql} WHERE mp_payment_id = ?"
+            );
+            $stmt->execute([$new_status, $payment_id]);
+            error_log("[MP Webhook] raffle_tickets updated rows=" . $stmt->rowCount());
 
         } elseif (str_starts_with($external_ref, 'rifa-')) {
             // Legado (bilhete único): external_ref = "rifa-{ticket_id}"
-            $ticket_id = substr($external_ref, 5);
-            $db->prepare(
-                "UPDATE raffle_tickets SET payment_status = ?, mp_payment_id = ?, updated_at = NOW() WHERE id = ?"
-            )->execute([$new_status, $payment_id, $ticket_id]);
+            $ticket_id   = substr($external_ref, 5);
+            $expires_sql = $new_status === 'approved' ? ', expires_at = NULL' : '';
+            $stmt = $db->prepare(
+                "UPDATE raffle_tickets SET payment_status = ?, mp_payment_id = ?, updated_at = NOW(){$expires_sql} WHERE id = ?"
+            );
+            $stmt->execute([$new_status, $payment_id, $ticket_id]);
+            error_log("[MP Webhook] raffle_tickets (legacy) updated rows=" . $stmt->rowCount());
 
         } elseif (str_starts_with($external_ref, 'gift-')) {
             $contribution_id = substr($external_ref, 5);
@@ -800,7 +808,7 @@ function handle_mp_webhook(PDO $db): void
                 "UPDATE gift_contributions SET payment_status = ?, mp_payment_id = ? WHERE id = ?"
             )->execute([$new_status, $payment_id, $contribution_id]);
         }
-    } catch (RuntimeException $e) {
+    } catch (\Exception $e) {
         // Log silencioso — não retornar erro para evitar retentativas infinitas do MP
         error_log('[MP Webhook] Erro: ' . $e->getMessage());
     }
