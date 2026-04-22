@@ -1178,9 +1178,8 @@ function handle_post_rsvp(PDO $db): void
         return;
     }
 
-    // Valida token: deve existir e pertencer ao casal (usado ou não — permite mudança de resposta)
     $stmt = $db->prepare(
-        'SELECT id, guest_name, used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
+        'SELECT id, guest_name, guests, used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
     );
     $stmt->execute([$invite_token, $couple_id]);
     $invite = $stmt->fetch();
@@ -1191,36 +1190,53 @@ function handle_post_rsvp(PDO $db): void
         return;
     }
 
-    $name       = substr(strip_tags($body['name'] ?? $invite['guest_name']), 0, 255);
-    $attendance = (int) ($body['attendance'] ?? 0);
-    $message    = substr(strip_tags($body['message'] ?? ''), 0, 2000);
+    // Suporta múltiplos convidados: body.responses = [{name, attendance}]
+    // ou formato legado: body.name + body.attendance
+    $guests_list = $invite['guests'] ? json_decode($invite['guests'], true) : [];
+    $message     = substr(strip_tags($body['message'] ?? ''), 0, 2000);
+
+    if (!empty($guests_list) && is_array($body['responses'] ?? null)) {
+        // Modo família: array de respostas individuais
+        $responses = [];
+        foreach ($body['responses'] as $r) {
+            $name       = substr(strip_tags($r['name'] ?? ''), 0, 255);
+            $attendance = (int) ($r['attendance'] ?? 0);
+            if ($name) $responses[] = ['name' => $name, 'attendance' => $attendance];
+        }
+    } else {
+        // Modo legado: resposta única
+        $name       = substr(strip_tags($body['name'] ?? $invite['guest_name']), 0, 255);
+        $attendance = (int) ($body['attendance'] ?? 0);
+        $responses  = [['name' => $name, 'attendance' => $attendance]];
+    }
 
     $db->beginTransaction();
     try {
-        if ($invite['used']) {
-            // Atualiza a resposta anterior buscando pelo nome do convidado
-            $existing = $db->prepare(
-                'SELECT id FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
-            );
-            $existing->execute([$couple_id, $invite['guest_name']]);
-            $prev = $existing->fetch();
+        foreach ($responses as $r) {
+            if ($invite['used']) {
+                $existing = $db->prepare(
+                    'SELECT id FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
+                );
+                $existing->execute([$couple_id, $r['name']]);
+                $prev = $existing->fetch();
 
-            if ($prev) {
-                $db->prepare(
-                    'UPDATE rsvp_responses SET attendance = ?, message = ?, name = ? WHERE id = ?'
-                )->execute([$attendance, $message, $name, $prev['id']]);
+                if ($prev) {
+                    $db->prepare(
+                        'UPDATE rsvp_responses SET attendance = ?, message = ? WHERE id = ?'
+                    )->execute([$r['attendance'], $message, $prev['id']]);
+                } else {
+                    $db->prepare(
+                        'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
+                    )->execute([$couple_id, $r['name'], $r['attendance'], $message]);
+                }
             } else {
-                // Fallback: insere novo caso não encontre o anterior
                 $db->prepare(
                     'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
-                )->execute([$couple_id, $name, $attendance, $message]);
+                )->execute([$couple_id, $r['name'], $r['attendance'], $message]);
             }
-        } else {
-            // Primeira resposta
-            $db->prepare(
-                'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
-            )->execute([$couple_id, $name, $attendance, $message]);
+        }
 
+        if (!$invite['used']) {
             $db->prepare(
                 'UPDATE invite_tokens SET used = 1, used_at = NOW() WHERE id = ?'
             )->execute([$invite['id']]);
@@ -1741,31 +1757,38 @@ function handle_invite_validate(PDO $db): void
     }
 
     $stmt = $db->prepare(
-        'SELECT guest_name, used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
+        'SELECT guest_name, guests, used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
     );
     $stmt->execute([$token, $couple_id]);
     $row = $stmt->fetch();
 
     if (!$row) {
-        echo json_encode(['valid' => false, 'guest_name' => null, 'used' => false, 'previous_attendance' => null]);
+        echo json_encode(['valid' => false, 'guest_name' => null, 'guests' => [], 'used' => false, 'previous_responses' => []]);
         return;
     }
 
-    $prev_attendance = null;
+    $guests = $row['guests'] ? json_decode($row['guests'], true) : [];
+
+    $prev_responses = [];
     if ($row['used']) {
-        $prev = $db->prepare(
-            'SELECT attendance FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
-        );
-        $prev->execute([$couple_id, $row['guest_name']]);
-        $prev_row = $prev->fetch();
-        if ($prev_row) $prev_attendance = (bool) $prev_row['attendance'];
+        // Para cada convidado individual, busca a resposta anterior
+        $names = count($guests) > 0 ? $guests : [$row['guest_name']];
+        foreach ($names as $name) {
+            $prev = $db->prepare(
+                'SELECT attendance FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
+            );
+            $prev->execute([$couple_id, $name]);
+            $prev_row = $prev->fetch();
+            $prev_responses[$name] = $prev_row ? (bool) $prev_row['attendance'] : null;
+        }
     }
 
     echo json_encode([
-        'valid'               => true,
-        'guest_name'          => $row['guest_name'],
-        'used'                => (bool) $row['used'],
-        'previous_attendance' => $prev_attendance,
+        'valid'              => true,
+        'guest_name'         => $row['guest_name'],
+        'guests'             => $guests,
+        'used'               => (bool) $row['used'],
+        'previous_responses' => $prev_responses,
     ]);
 }
 
@@ -1778,7 +1801,7 @@ function handle_admin_get_invites(PDO $db): void
     $site_url  = rtrim(SITE_URL, '/');
 
     $stmt = $db->prepare(
-        'SELECT id, token, guest_name, whatsapp, email, sent, sent_at, used, used_at, created_at
+        'SELECT id, token, guest_name, guests, whatsapp, email, sent, sent_at, used, used_at, created_at
            FROM invite_tokens
           WHERE couple_id = ?
           ORDER BY created_at DESC
@@ -1790,6 +1813,7 @@ function handle_admin_get_invites(PDO $db): void
     $result = array_map(fn($r) => array_merge($r, [
         'sent'       => (bool) $r['sent'],
         'used'       => (bool) $r['used'],
+        'guests'     => $r['guests'] ? json_decode($r['guests'], true) : [],
         'invite_url' => "{$site_url}?invite={$r['token']}",
     ]), $rows);
 
@@ -1798,7 +1822,7 @@ function handle_admin_get_invites(PDO $db): void
 
 /**
  * POST /api/admin/invites  (admin autenticado)
- * Body: { guest_name, whatsapp?, email? }
+ * Body: { guest_name, guests?: string[], whatsapp?, email? }
  */
 function handle_admin_create_invite(PDO $db): void
 {
@@ -1807,6 +1831,9 @@ function handle_admin_create_invite(PDO $db): void
     $guest_name = substr(trim(strip_tags($body['guest_name'] ?? '')), 0, 255);
     $whatsapp   = substr(trim(strip_tags($body['whatsapp']   ?? '')), 0, 30)  ?: null;
     $email      = filter_var(trim($body['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null;
+    $guests_raw = is_array($body['guests'] ?? null) ? $body['guests'] : [];
+    $guests     = array_values(array_filter(array_map(fn($g) => substr(trim(strip_tags($g)), 0, 255), $guests_raw)));
+    $guests_json = count($guests) > 0 ? json_encode($guests, JSON_UNESCAPED_UNICODE) : null;
 
     if (!$guest_name) {
         http_response_code(422);
@@ -1818,9 +1845,9 @@ function handle_admin_create_invite(PDO $db): void
     $id    = generate_uuid();
 
     $db->prepare(
-        'INSERT INTO invite_tokens (id, couple_id, token, guest_name, whatsapp, email)
-         VALUES (?, ?, ?, ?, ?, ?)'
-    )->execute([$id, $couple_id, $token, $guest_name, $whatsapp, $email]);
+        'INSERT INTO invite_tokens (id, couple_id, token, guest_name, guests, whatsapp, email)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
+    )->execute([$id, $couple_id, $token, $guest_name, $guests_json, $whatsapp, $email]);
 
     $site_url = rtrim(SITE_URL, '/');
     http_response_code(201);
@@ -1828,6 +1855,7 @@ function handle_admin_create_invite(PDO $db): void
         'id'         => $id,
         'token'      => $token,
         'guest_name' => $guest_name,
+        'guests'     => $guests,
         'whatsapp'   => $whatsapp,
         'email'      => $email,
         'sent'       => false,
@@ -1956,7 +1984,7 @@ function handle_admin_mark_invite_sent(PDO $db, string $token): void
  */
 /**
  * PUT /api/admin/invites/{token}
- * Body: { guest_name, whatsapp?, email? }
+ * Body: { guest_name, guests?: string[], whatsapp?, email? }
  */
 function handle_admin_update_invite(PDO $db, string $token): void
 {
@@ -1965,6 +1993,9 @@ function handle_admin_update_invite(PDO $db, string $token): void
     $guest_name = substr(trim(strip_tags($body['guest_name'] ?? '')), 0, 255);
     $whatsapp   = substr(trim(strip_tags($body['whatsapp']   ?? '')), 0, 30)  ?: null;
     $email      = filter_var(trim($body['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null;
+    $guests_raw = is_array($body['guests'] ?? null) ? $body['guests'] : [];
+    $guests     = array_values(array_filter(array_map(fn($g) => substr(trim(strip_tags($g)), 0, 255), $guests_raw)));
+    $guests_json = count($guests) > 0 ? json_encode($guests, JSON_UNESCAPED_UNICODE) : null;
 
     if (!$guest_name) {
         http_response_code(422);
@@ -1973,9 +2004,9 @@ function handle_admin_update_invite(PDO $db, string $token): void
     }
 
     $stmt = $db->prepare(
-        'UPDATE invite_tokens SET guest_name = ?, whatsapp = ?, email = ? WHERE token = ? AND couple_id = ?'
+        'UPDATE invite_tokens SET guest_name = ?, guests = ?, whatsapp = ?, email = ? WHERE token = ? AND couple_id = ?'
     );
-    $stmt->execute([$guest_name, $whatsapp, $email, $token, $couple_id]);
+    $stmt->execute([$guest_name, $guests_json, $whatsapp, $email, $token, $couple_id]);
 
     if ($stmt->rowCount() === 0) {
         http_response_code(404);
@@ -1990,12 +2021,36 @@ function handle_admin_delete_invite(PDO $db, string $token): void
 {
     $couple_id = get_authenticated_couple_id($db);
 
-    $stmt = $db->prepare('DELETE FROM invite_tokens WHERE token = ? AND couple_id = ?');
-    $stmt->execute([$token, $couple_id]);
+    // Busca o nome do convidado antes de deletar para limpar o RSVP
+    $check = $db->prepare('SELECT guest_name, guests FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1');
+    $check->execute([$token, $couple_id]);
+    $invite = $check->fetch();
 
-    if ($stmt->rowCount() === 0) {
+    if (!$invite) {
         http_response_code(404);
         echo json_encode(['error' => 'Convite não encontrado.']);
+        return;
+    }
+
+    $guests      = $invite['guests'] ? json_decode($invite['guests'], true) : [];
+    $all_names   = count($guests) > 0 ? $guests : [$invite['guest_name']];
+
+    $db->beginTransaction();
+    try {
+        // Remove o convite
+        $db->prepare('DELETE FROM invite_tokens WHERE token = ? AND couple_id = ?')
+           ->execute([$token, $couple_id]);
+
+        // Remove todas as respostas RSVP do grupo
+        $placeholders = implode(',', array_fill(0, count($all_names), '?'));
+        $db->prepare("DELETE FROM rsvp_responses WHERE couple_id = ? AND name IN ({$placeholders})")
+           ->execute([$couple_id, ...$all_names]);
+
+        $db->commit();
+    } catch (\Exception $e) {
+        $db->rollBack();
+        http_response_code(500);
+        echo json_encode(['error' => 'Erro ao excluir convidado.']);
         return;
     }
 
