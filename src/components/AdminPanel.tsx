@@ -32,6 +32,8 @@ import {
   markInviteSent,
   deleteInviteToken,
   updateInviteToken,
+  updateAdminRsvp,
+  deleteAdminRsvp,
 } from '../services/adminData';
 import type {
   DashboardStats,
@@ -608,23 +610,81 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
     setEditingToken(null);
   }, [editingToken, editName, editGuests, editWa, editEmail, handleUpdate]);
 
-  const filtered = useMemo(() => {
-    return responses.filter((r) => {
-      const matchSearch = r.name.toLowerCase().includes(search.toLowerCase());
-      const matchFilter =
-        filter === 'all' ||
-        (filter === 'confirmed' && r.attendance) ||
-        (filter === 'declined' && !r.attendance);
+  // Edição/exclusão por membro (RSVP individual)
+  const [editingRsvpId,   setEditingRsvpId]   = useState<string | null>(null);
+  const [editRsvpName,    setEditRsvpName]    = useState('');
+  const [editRsvpAtt,     setEditRsvpAtt]     = useState<1 | 0>(1);
+  const [editRsvpMsg,     setEditRsvpMsg]     = useState('');
+  const [rsvpSaving,      setRsvpSaving]      = useState(false);
+  const [localResponses,  setLocalResponses]  = useState<RsvpResponse[]>([]);
+
+  // Sincroniza respostas locais com as vindas do pai
+  useEffect(() => { setLocalResponses(responses); }, [responses]);
+
+  const startEditRsvp = useCallback((r: RsvpResponse) => {
+    setEditingRsvpId(r.id);
+    setEditRsvpName(r.name);
+    setEditRsvpAtt(r.attendance ? 1 : 0);
+    setEditRsvpMsg(r.message ?? '');
+  }, []);
+
+  const saveRsvp = useCallback(async () => {
+    if (!editingRsvpId || !editRsvpName.trim()) return;
+    setRsvpSaving(true);
+    try {
+      await updateAdminRsvp(editingRsvpId, { name: editRsvpName.trim(), attendance: editRsvpAtt, message: editRsvpMsg.trim() });
+      setLocalResponses((prev) => prev.map((r) =>
+        r.id === editingRsvpId ? { ...r, name: editRsvpName.trim(), attendance: !!editRsvpAtt, message: editRsvpMsg.trim() } : r
+      ));
+      setEditingRsvpId(null);
+    } catch { /* silent */ } finally { setRsvpSaving(false); }
+  }, [editingRsvpId, editRsvpName, editRsvpAtt, editRsvpMsg]);
+
+  const deleteRsvp = useCallback(async (id: string) => {
+    try {
+      await deleteAdminRsvp(id);
+      setLocalResponses((prev) => prev.filter((r) => r.id !== id));
+    } catch { /* silent */ }
+  }, []);
+
+  // Agrupa respostas por convite (família ou individual) — usa localResponses para refletir edições
+  const groupedByInvite = useMemo(() => {
+    const groups: { inv: typeof invites[0]; members: RsvpResponse[] }[] = [];
+    const matchedIds = new Set<string>();
+
+    for (const inv of invites) {
+      const names = inv.guests && inv.guests.length > 0 ? inv.guests : [inv.guest_name];
+      const members = localResponses.filter((r) =>
+        names.some((n) => n.toLowerCase() === r.name.toLowerCase())
+      );
+      if (members.length > 0) {
+        groups.push({ inv, members });
+        members.forEach((m) => matchedIds.add(m.id));
+      }
+    }
+
+    const unmatched = localResponses.filter((r) => !matchedIds.has(r.id));
+    return { groups, unmatched };
+  }, [invites, localResponses]);
+
+  const filteredGroups = useMemo(() => {
+    const q = search.toLowerCase();
+    return groupedByInvite.groups.filter(({ inv, members }) => {
+      const names = inv.guests && inv.guests.length > 0 ? inv.guests : [inv.guest_name];
+      const matchSearch = !q || inv.guest_name.toLowerCase().includes(q) || names.some((n) => n.toLowerCase().includes(q));
+      const matchFilter = filter === 'all'
+        || (filter === 'confirmed' && members.some((m) => m.attendance))
+        || (filter === 'declined'  && members.some((m) => !m.attendance));
       return matchSearch && matchFilter;
     });
-  }, [responses, search, filter]);
+  }, [groupedByInvite, search, filter]);
 
-  // Totais — cada convite com guests conta os nomes individuais
+  // Totais
   const totalCadastrados = useMemo(() =>
     invites.reduce((sum, i) => sum + (i.guests && i.guests.length > 0 ? i.guests.length : 1), 0),
   [invites]);
-  const totalConfirmados = useMemo(() => responses.filter((r) => r.attendance).length, [responses]);
-  const totalDeclinados  = useMemo(() => responses.filter((r) => !r.attendance).length, [responses]);
+  const totalConfirmados = useMemo(() => localResponses.filter((r) => r.attendance).length, [localResponses]);
+  const totalDeclinados  = useMemo(() => localResponses.filter((r) => !r.attendance).length, [localResponses]);
 
   return (
     <div className="space-y-4">
@@ -779,52 +839,122 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
       <p className={labelCls}>Respostas recebidas</p>
 
       <div className="space-y-2">
-        {filtered.length === 0 && (
-          <p className="text-center text-stone-400 text-sm italic py-8">Nenhum resultado.</p>
+        {filteredGroups.length === 0 && groupedByInvite.unmatched.length === 0 && (
+          <p className="text-center text-stone-400 text-sm italic py-8">Nenhuma resposta ainda.</p>
         )}
-        {filtered.map((r) => {
-          const inv = invites.find((i) => i.guest_name.toLowerCase() === r.name.toLowerCase());
-          const hasDetails = !!r.message || !!inv;
+
+        {/* Grupos por convite (família ou individual) */}
+        {filteredGroups.map(({ inv, members }) => {
+          const isFamily   = inv.guests && inv.guests.length > 1;
+          const confirmed  = members.filter((m) => m.attendance).length;
+          const key        = inv.token;
+          const hasMessage = members.some((m) => m.message);
+
           return (
-          <div key={r.id} className="bg-white rounded-2xl overflow-hidden border border-stone-100 shadow-sm">
-            <button
-              className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-colors"
-              onClick={() => hasDetails && setExpanded(expanded === r.id ? null : r.id)}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${r.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
-                <div>
-                  <p className="font-semibold text-stone-900 text-sm">{r.name}</p>
-                  <p className="text-xs text-stone-400 flex items-center gap-1 mt-0.5">
-                    <Calendar size={10} />
-                    {fmtDate(r.created_at)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                  r.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
-                }`}>
-                  {r.attendance ? 'Confirmado' : 'Declinado'}
-                </span>
-                {r.message && <MessageSquare size={13} className="text-stone-400 flex-shrink-0" />}
-                {hasDetails && <ChevronDown size={13} className={`text-stone-400 transition-transform ${expanded === r.id ? 'rotate-180' : ''}`} />}
-              </div>
-            </button>
-            <AnimatePresence>
-              {expanded === r.id && hasDetails && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden border-t border-stone-100"
-                >
-                  {r.message && (
-                    <p className="px-5 py-3 text-sm text-stone-600 italic">
-                      "{r.message}"
+            <div key={key} className="bg-white rounded-2xl overflow-hidden border border-stone-100 shadow-sm">
+              {/* Header do card */}
+              <button
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-colors"
+                onClick={() => setExpanded(expanded === key ? null : key)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    {isFamily
+                      ? members.map((m) => (
+                          <div key={m.id} className={`w-2 h-2 rounded-full ${m.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
+                        ))
+                      : <div className={`w-2.5 h-2.5 rounded-full ${members[0]?.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
+                    }
+                  </div>
+                  <div>
+                    <p className="font-semibold text-stone-900 text-sm">{inv.guest_name}</p>
+                    <p className="text-xs text-stone-400 flex items-center gap-1 mt-0.5">
+                      <Calendar size={10} />
+                      {fmtDate(members[0]?.created_at ?? '')}
                     </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isFamily ? (
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-stone-100 text-stone-600">
+                      {confirmed}/{members.length} confirmados
+                    </span>
+                  ) : (
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                      members[0]?.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {members[0]?.attendance ? 'Confirmado' : 'Declinado'}
+                    </span>
                   )}
-                  {inv && (
+                  {hasMessage && <MessageSquare size={13} className="text-stone-400 flex-shrink-0" />}
+                  <ChevronDown size={13} className={`text-stone-400 transition-transform ${expanded === key ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              {/* Detalhes expandidos */}
+              <AnimatePresence>
+                {expanded === key && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-t border-stone-100"
+                  >
+                    {/* Membros da família — edit/delete por pessoa */}
+                    {members.map((m) => (
+                      <div key={m.id} className="border-b border-stone-50 last:border-0">
+                        {editingRsvpId === m.id ? (
+                          <div className="px-5 py-3 space-y-2 bg-stone-50">
+                            <input value={editRsvpName} onChange={(e) => setEditRsvpName(e.target.value)}
+                              className={inputCls} placeholder="Nome" />
+                            <select value={editRsvpAtt} onChange={(e) => setEditRsvpAtt(Number(e.target.value) as 1 | 0)}
+                              className={inputCls}>
+                              <option value={1}>Confirmado</option>
+                              <option value={0}>Declinado</option>
+                            </select>
+                            <textarea value={editRsvpMsg} onChange={(e) => setEditRsvpMsg(e.target.value)}
+                              rows={2} placeholder="Mensagem (opcional)" className={`${inputCls} resize-none`} />
+                            <div className="flex gap-2">
+                              <button onClick={saveRsvp} disabled={rsvpSaving || !editRsvpName.trim()}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-[#94A684] disabled:opacity-40 transition-all">
+                                {rsvpSaving ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} />}
+                                Salvar
+                              </button>
+                              <button onClick={() => setEditingRsvpId(null)}
+                                className="px-3 py-1.5 bg-white text-stone-500 rounded-lg text-xs font-bold border border-stone-200 hover:bg-stone-100 transition-all">
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="px-5 py-3 flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
+                                <p className="text-sm font-medium text-stone-800">{m.name}</p>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                  m.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+                                }`}>
+                                  {m.attendance ? 'Confirmado' : 'Declinado'}
+                                </span>
+                              </div>
+                              {m.message && (
+                                <p className="text-xs text-stone-500 italic mt-1.5 ml-4">"{m.message}"</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button onClick={() => startEditRsvp(m)} title="Editar"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors">
+                                <Pencil size={12} />
+                              </button>
+                              <DeleteButton onConfirm={() => deleteRsvp(m.id)} size="xs" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Contato e ações */}
                     <div className="flex items-center gap-3 px-5 py-3 bg-stone-50">
                       <div className="flex-1 flex items-center gap-3 flex-wrap">
                         {inv.whatsapp && <span className="flex items-center gap-1 text-xs text-stone-500"><Phone size={11} />{inv.whatsapp}</span>}
@@ -854,13 +984,52 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                         <DeleteButton onConfirm={() => handleDelete(inv.token)} size="xs" />
                       </div>
                     </div>
-                  )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+
+        {/* Respostas sem convite vinculado */}
+        {groupedByInvite.unmatched.filter((r) => {
+          const q = search.toLowerCase();
+          return (!q || r.name.toLowerCase().includes(q)) &&
+            (filter === 'all' || (filter === 'confirmed' && r.attendance) || (filter === 'declined' && !r.attendance));
+        }).map((r) => (
+          <div key={r.id} className="bg-white rounded-2xl overflow-hidden border border-stone-100 shadow-sm">
+            <button
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-colors"
+              onClick={() => r.message && setExpanded(expanded === r.id ? null : r.id)}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${r.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
+                <div>
+                  <p className="font-semibold text-stone-900 text-sm">{r.name}</p>
+                  <p className="text-xs text-stone-400 flex items-center gap-1 mt-0.5">
+                    <Calendar size={10} />{fmtDate(r.created_at)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                  r.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+                }`}>
+                  {r.attendance ? 'Confirmado' : 'Declinado'}
+                </span>
+                {r.message && <ChevronDown size={13} className={`text-stone-400 transition-transform ${expanded === r.id ? 'rotate-180' : ''}`} />}
+              </div>
+            </button>
+            <AnimatePresence>
+              {expanded === r.id && r.message && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden border-t border-stone-100">
+                  <p className="px-5 py-3 text-sm text-stone-600 italic">"{r.message}"</p>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );

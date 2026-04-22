@@ -154,6 +154,10 @@ elseif  ($method === 'POST' && $path === '/payments/webhook')     handle_mp_webh
 elseif  ($method === 'POST' && $path === '/login')                handle_login($db);
 elseif  ($method === 'GET'  && $path === '/rsvp')                 handle_get_rsvp($db);
 elseif  ($method === 'POST' && $path === '/rsvp')                 handle_post_rsvp($db);
+elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/rsvp/'))
+                                                                   handle_admin_update_rsvp($db, substr($path, 12));
+elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/rsvp/'))
+                                                                   handle_admin_delete_rsvp($db, substr($path, 12));
 elseif  ($method === 'GET'  && $path === '/gifts/contributions')  handle_get_contributions($db);
 elseif  ($method === 'GET'  && $path === '/gifts/summary')        handle_get_gift_summary($db);
 elseif  ($method === 'GET'  && $path === '/dashboard')            handle_dashboard($db);
@@ -2055,5 +2059,58 @@ function handle_admin_delete_invite(PDO $db, string $token): void
     }
 
     http_response_code(200);
+    echo json_encode(['ok' => true]);
+}
+
+// ═══ HANDLERS — RSVP Admin ════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/rsvp/{id}
+ * Body: { name, attendance, message? }
+ */
+function handle_admin_update_rsvp(PDO $db, string $id): void
+{
+    $couple_id  = get_authenticated_couple_id($db);
+    $body       = json_input();
+    $name       = substr(trim(strip_tags($body['name'] ?? '')), 0, 255);
+    $attendance = (int) ($body['attendance'] ?? 0);
+    $message    = substr(strip_tags($body['message'] ?? ''), 0, 2000);
+
+    if (!$name) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Nome obrigatório.']);
+        return;
+    }
+
+    $stmt = $db->prepare(
+        'UPDATE rsvp_responses SET name = ?, attendance = ?, message = ? WHERE id = ? AND couple_id = ?'
+    );
+    $stmt->execute([$name, $attendance, $message, $id, $couple_id]);
+
+    if ($stmt->rowCount() === 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Resposta não encontrada.']);
+        return;
+    }
+
+    echo json_encode(['ok' => true]);
+}
+
+/**
+ * DELETE /api/admin/rsvp/{id}
+ */
+function handle_admin_delete_rsvp(PDO $db, string $id): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    $stmt = $db->prepare('DELETE FROM rsvp_responses WHERE id = ? AND couple_id = ?');
+    $stmt->execute([$id, $couple_id]);
+
+    if ($stmt->rowCount() === 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Resposta não encontrada.']);
+        return;
+    }
+
     echo json_encode(['ok' => true]);
 }
