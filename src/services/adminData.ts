@@ -234,5 +234,5 @@ export async function validateInviteToken(
   const res = await fetch(
     `${API}/invites/validate?token=${encodeURIComponent(token)}&couple=${encodeURIComponent(couple)}`
   );
-  return res.json() as Promise<{ valid: boolean; guest_name: string | null; used: boolean }>;
+  return res.json() as Promise<{ valid: boolean; guest_name: string | null; used: boolean; previous_attendance: boolean | null }>;
 }
