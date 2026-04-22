@@ -1176,34 +1176,53 @@ function handle_post_rsvp(PDO $db): void
         return;
     }
 
-    // Valida token: deve existir, pertencer ao casal e não ter sido usado
+    // Valida token: deve existir e pertencer ao casal (usado ou não — permite mudança de resposta)
     $stmt = $db->prepare(
-        'SELECT id FROM invite_tokens WHERE token = ? AND couple_id = ? AND used = 0 LIMIT 1'
+        'SELECT id, guest_name, used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
     );
     $stmt->execute([$invite_token, $couple_id]);
     $invite = $stmt->fetch();
 
     if (!$invite) {
         http_response_code(403);
-        echo json_encode(['error' => 'Convite inválido ou já utilizado.']);
+        echo json_encode(['error' => 'Convite inválido.']);
         return;
     }
 
+    $name       = substr(strip_tags($body['name'] ?? $invite['guest_name']), 0, 255);
+    $attendance = (int) ($body['attendance'] ?? 0);
+    $message    = substr(strip_tags($body['message'] ?? ''), 0, 2000);
+
     $db->beginTransaction();
     try {
-        $db->prepare(
-            'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message)
-             VALUES (UUID(), ?, ?, ?, ?)'
-        )->execute([
-            $couple_id,
-            substr(strip_tags($body['name'] ?? ''), 0, 255),
-            (int) ($body['attendance'] ?? 0),
-            substr(strip_tags($body['message'] ?? ''), 0, 2000),
-        ]);
+        if ($invite['used']) {
+            // Atualiza a resposta anterior buscando pelo nome do convidado
+            $existing = $db->prepare(
+                'SELECT id FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
+            );
+            $existing->execute([$couple_id, $invite['guest_name']]);
+            $prev = $existing->fetch();
 
-        $db->prepare(
-            'UPDATE invite_tokens SET used = 1, used_at = NOW() WHERE id = ?'
-        )->execute([$invite['id']]);
+            if ($prev) {
+                $db->prepare(
+                    'UPDATE rsvp_responses SET attendance = ?, message = ?, name = ? WHERE id = ?'
+                )->execute([$attendance, $message, $name, $prev['id']]);
+            } else {
+                // Fallback: insere novo caso não encontre o anterior
+                $db->prepare(
+                    'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
+                )->execute([$couple_id, $name, $attendance, $message]);
+            }
+        } else {
+            // Primeira resposta
+            $db->prepare(
+                'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
+            )->execute([$couple_id, $name, $attendance, $message]);
+
+            $db->prepare(
+                'UPDATE invite_tokens SET used = 1, used_at = NOW() WHERE id = ?'
+            )->execute([$invite['id']]);
+        }
 
         $db->commit();
     } catch (\Exception $e) {
@@ -1726,14 +1745,25 @@ function handle_invite_validate(PDO $db): void
     $row = $stmt->fetch();
 
     if (!$row) {
-        echo json_encode(['valid' => false, 'guest_name' => null, 'used' => false]);
+        echo json_encode(['valid' => false, 'guest_name' => null, 'used' => false, 'previous_attendance' => null]);
         return;
     }
 
+    $prev_attendance = null;
+    if ($row['used']) {
+        $prev = $db->prepare(
+            'SELECT attendance FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
+        );
+        $prev->execute([$couple_id, $row['guest_name']]);
+        $prev_row = $prev->fetch();
+        if ($prev_row) $prev_attendance = (bool) $prev_row['attendance'];
+    }
+
     echo json_encode([
-        'valid'      => true,
-        'guest_name' => $row['guest_name'],
-        'used'       => (bool) $row['used'],
+        'valid'               => true,
+        'guest_name'          => $row['guest_name'],
+        'used'                => (bool) $row['used'],
+        'previous_attendance' => $prev_attendance,
     ]);
 }
 
@@ -1830,16 +1860,56 @@ function handle_admin_send_invite_email(PDO $db, string $token): void
     $to         = $invite['email'];
     $subject    = "=?UTF-8?B?" . base64_encode("Você foi convidado para o casamento de Álvaro & Larissa 💌") . "?=";
 
-    $body = "Olá, {$name}!\n\n"
-          . "Temos o prazer de convidá-lo(a) para o casamento de Álvaro & Larissa.\n\n"
-          . "Para confirmar sua presença, acesse o link exclusivo abaixo:\n"
-          . "{$invite_url}\n\n"
-          . "Este link é pessoal e intransferível.\n\n"
-          . "Com carinho,\nÁlvaro & Larissa 💚";
+    $body = <<<HTML
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F2F1EC;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F2F1EC;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.07);">
+        <tr>
+          <td style="background:linear-gradient(90deg,#A899B5,#E8C9B5,#8FA9B8);height:6px;"></td>
+        </tr>
+        <tr>
+          <td style="padding:48px 48px 16px;text-align:center;">
+            <p style="font-size:13px;letter-spacing:0.3em;text-transform:uppercase;color:#94A684;margin:0 0 16px;">Convite de Casamento</p>
+            <h1 style="font-size:36px;color:#1e1b18;margin:0;font-weight:400;">Olá, {$name}!</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 48px 32px;text-align:center;">
+            <p style="font-size:16px;color:#5a5047;line-height:1.7;margin:0 0 32px;">
+              Temos o prazer de convidá-lo(a) para celebrar o casamento de<br>
+              <strong style="color:#1e1b18;">Álvaro &amp; Larissa</strong>.
+            </p>
+            <a href="{$invite_url}"
+               style="display:inline-block;background:#94A684;color:#fff;text-decoration:none;padding:16px 40px;border-radius:50px;font-size:14px;font-weight:bold;letter-spacing:0.15em;text-transform:uppercase;">
+              Envie sua resposta
+            </a>
+            <p style="font-size:12px;color:#9b928a;margin:24px 0 0;font-style:italic;">
+              Este link é pessoal e intransferível.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 48px 40px;text-align:center;border-top:1px solid #f0ece8;">
+            <p style="font-size:14px;color:#9b928a;margin:0;">Com carinho,<br>
+              <strong style="color:#1e1b18;">Álvaro &amp; Larissa 💚</strong>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+HTML;
 
     $headers  = "From: casamento@alvinlari.com.br\r\n";
     $headers .= "Reply-To: casamento@alvinlari.com.br\r\n";
-    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
 
     $sent = mail($to, $subject, $body, $headers);
 

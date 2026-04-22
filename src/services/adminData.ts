@@ -230,7 +230,7 @@ export async function deleteInviteToken(token: string): Promise<void> {
 export async function validateInviteToken(
   token: string,
   couple: string
-): Promise<{ valid: boolean; guest_name: string | null; used: boolean }> {
+): Promise<{ valid: boolean; guest_name: string | null; used: boolean; previous_attendance: boolean | null }> {
   const res = await fetch(
     `${API}/invites/validate?token=${encodeURIComponent(token)}&couple=${encodeURIComponent(couple)}`
   );
