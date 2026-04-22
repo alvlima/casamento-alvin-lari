@@ -175,6 +175,15 @@ elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/gifts/'))
                                                                    handle_admin_update_gift($db, substr($path, 13));
 elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/gifts/'))
                                                                    handle_admin_delete_gift($db, substr($path, 13));
+elseif  ($method === 'GET'    && $path === '/invites/validate')    handle_invite_validate($db);
+elseif  ($method === 'GET'    && $path === '/admin/invites')       handle_admin_get_invites($db);
+elseif  ($method === 'POST'   && $path === '/admin/invites')       handle_admin_create_invite($db);
+elseif  ($method === 'POST'   && str_starts_with($path, '/admin/invites/') && str_ends_with($path, '/send-email'))
+                                                                   handle_admin_send_invite_email($db, substr($path, 15, -11));
+elseif  ($method === 'POST'   && str_starts_with($path, '/admin/invites/') && str_ends_with($path, '/mark-sent'))
+                                                                   handle_admin_mark_invite_sent($db, substr($path, 15, -10));
+elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/invites/'))
+                                                                   handle_admin_delete_invite($db, substr($path, 15));
 else    { http_response_code(404); echo json_encode(['error' => 'Rota não encontrada.']); }
 
 
@@ -1157,18 +1166,52 @@ function handle_get_rsvp(PDO $db): void
 
 function handle_post_rsvp(PDO $db): void
 {
-    $couple_id = resolve_couple_by_slug($db, $_GET['couple'] ?? '');
-    $body      = json_input();
+    $couple_id    = resolve_couple_by_slug($db, $_GET['couple'] ?? '');
+    $body         = json_input();
+    $invite_token = trim($body['invite_token'] ?? '');
 
-    $db->prepare(
-        'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message)
-         VALUES (UUID(), ?, ?, ?, ?)'
-    )->execute([
-        $couple_id,
-        substr(strip_tags($body['name'] ?? ''), 0, 255),
-        (int) ($body['attendance'] ?? 0),
-        substr(strip_tags($body['message'] ?? ''), 0, 2000),
-    ]);
+    if (!$invite_token) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Convite obrigatório. Use o link do seu convite.']);
+        return;
+    }
+
+    // Valida token: deve existir, pertencer ao casal e não ter sido usado
+    $stmt = $db->prepare(
+        'SELECT id FROM invite_tokens WHERE token = ? AND couple_id = ? AND used = 0 LIMIT 1'
+    );
+    $stmt->execute([$invite_token, $couple_id]);
+    $invite = $stmt->fetch();
+
+    if (!$invite) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Convite inválido ou já utilizado.']);
+        return;
+    }
+
+    $db->beginTransaction();
+    try {
+        $db->prepare(
+            'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message)
+             VALUES (UUID(), ?, ?, ?, ?)'
+        )->execute([
+            $couple_id,
+            substr(strip_tags($body['name'] ?? ''), 0, 255),
+            (int) ($body['attendance'] ?? 0),
+            substr(strip_tags($body['message'] ?? ''), 0, 2000),
+        ]);
+
+        $db->prepare(
+            'UPDATE invite_tokens SET used = 1, used_at = NOW() WHERE id = ?'
+        )->execute([$invite['id']]);
+
+        $db->commit();
+    } catch (\Exception $e) {
+        $db->rollBack();
+        http_response_code(500);
+        echo json_encode(['error' => 'Erro ao registrar presença.']);
+        return;
+    }
 
     http_response_code(201);
     echo json_encode(['ok' => true]);
@@ -1657,4 +1700,212 @@ function admin_gift_upsert(PDO $db, string $couple_id, ?string $gift_id, array $
     }
 
     return [$gift_id, null];
+}
+
+
+// ═══ HANDLERS — Convites ══════════════════════════════════════════════════════
+
+/**
+ * GET /api/invites/validate?token=TOKEN&couple=slug
+ * Endpoint público — valida token sem expor dados sensíveis.
+ */
+function handle_invite_validate(PDO $db): void
+{
+    $couple_id = resolve_couple_by_slug($db, $_GET['couple'] ?? '');
+    $token     = trim($_GET['token'] ?? '');
+
+    if (!$token) {
+        echo json_encode(['valid' => false, 'guest_name' => null, 'used' => false]);
+        return;
+    }
+
+    $stmt = $db->prepare(
+        'SELECT guest_name, used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
+    );
+    $stmt->execute([$token, $couple_id]);
+    $row = $stmt->fetch();
+
+    if (!$row) {
+        echo json_encode(['valid' => false, 'guest_name' => null, 'used' => false]);
+        return;
+    }
+
+    echo json_encode([
+        'valid'      => true,
+        'guest_name' => $row['guest_name'],
+        'used'       => (bool) $row['used'],
+    ]);
+}
+
+/**
+ * GET /api/admin/invites  (admin autenticado)
+ */
+function handle_admin_get_invites(PDO $db): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+    $site_url  = rtrim(SITE_URL, '/');
+
+    $stmt = $db->prepare(
+        'SELECT id, token, guest_name, whatsapp, email, sent, sent_at, used, used_at, created_at
+           FROM invite_tokens
+          WHERE couple_id = ?
+          ORDER BY created_at DESC
+          LIMIT 500'
+    );
+    $stmt->execute([$couple_id]);
+    $rows = $stmt->fetchAll();
+
+    $result = array_map(fn($r) => array_merge($r, [
+        'sent'       => (bool) $r['sent'],
+        'used'       => (bool) $r['used'],
+        'invite_url' => "{$site_url}?invite={$r['token']}",
+    ]), $rows);
+
+    echo json_encode($result);
+}
+
+/**
+ * POST /api/admin/invites  (admin autenticado)
+ * Body: { guest_name, whatsapp?, email? }
+ */
+function handle_admin_create_invite(PDO $db): void
+{
+    $couple_id  = get_authenticated_couple_id($db);
+    $body       = json_input();
+    $guest_name = substr(trim(strip_tags($body['guest_name'] ?? '')), 0, 255);
+    $whatsapp   = substr(trim(strip_tags($body['whatsapp']   ?? '')), 0, 30)  ?: null;
+    $email      = filter_var(trim($body['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null;
+
+    if (!$guest_name) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Nome do convidado obrigatório.']);
+        return;
+    }
+
+    $token = bin2hex(random_bytes(16));
+    $id    = generate_uuid();
+
+    $db->prepare(
+        'INSERT INTO invite_tokens (id, couple_id, token, guest_name, whatsapp, email)
+         VALUES (?, ?, ?, ?, ?, ?)'
+    )->execute([$id, $couple_id, $token, $guest_name, $whatsapp, $email]);
+
+    $site_url = rtrim(SITE_URL, '/');
+    http_response_code(201);
+    echo json_encode([
+        'id'         => $id,
+        'token'      => $token,
+        'guest_name' => $guest_name,
+        'whatsapp'   => $whatsapp,
+        'email'      => $email,
+        'sent'       => false,
+        'used'       => false,
+        'invite_url' => "{$site_url}?invite={$token}",
+    ]);
+}
+
+/**
+ * POST /api/admin/invites/{token}/send-email  (admin autenticado)
+ * Envia e-mail via PHP mail() e marca como enviado.
+ */
+function handle_admin_send_invite_email(PDO $db, string $token): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    $stmt = $db->prepare(
+        'SELECT id, guest_name, email FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1'
+    );
+    $stmt->execute([$token, $couple_id]);
+    $invite = $stmt->fetch();
+
+    if (!$invite || !$invite['email']) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Convite não encontrado ou sem e-mail cadastrado.']);
+        return;
+    }
+
+    $site_url   = rtrim(SITE_URL, '/');
+    $invite_url = "{$site_url}?invite={$token}";
+    $name       = $invite['guest_name'];
+    $to         = $invite['email'];
+    $subject    = "=?UTF-8?B?" . base64_encode("Você foi convidado para o casamento de Álvaro & Larissa 💌") . "?=";
+
+    $body = "Olá, {$name}!\n\n"
+          . "Temos o prazer de convidá-lo(a) para o casamento de Álvaro & Larissa.\n\n"
+          . "Para confirmar sua presença, acesse o link exclusivo abaixo:\n"
+          . "{$invite_url}\n\n"
+          . "Este link é pessoal e intransferível.\n\n"
+          . "Com carinho,\nÁlvaro & Larissa 💚";
+
+    $headers  = "From: casamento@alvinlari.com.br\r\n";
+    $headers .= "Reply-To: casamento@alvinlari.com.br\r\n";
+    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+
+    $sent = mail($to, $subject, $body, $headers);
+
+    if (!$sent) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Falha ao enviar e-mail. Verifique as configurações do servidor.']);
+        return;
+    }
+
+    $db->prepare(
+        'UPDATE invite_tokens SET sent = 1, sent_at = NOW() WHERE id = ?'
+    )->execute([$invite['id']]);
+
+    echo json_encode(['ok' => true]);
+}
+
+/**
+ * POST /api/admin/invites/{token}/mark-sent  (admin autenticado)
+ * Marca convite como enviado (usado após envio manual via WhatsApp).
+ */
+function handle_admin_mark_invite_sent(PDO $db, string $token): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    $stmt = $db->prepare(
+        'UPDATE invite_tokens SET sent = 1, sent_at = NOW() WHERE token = ? AND couple_id = ?'
+    );
+    $stmt->execute([$token, $couple_id]);
+
+    if ($stmt->rowCount() === 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Convite não encontrado.']);
+        return;
+    }
+
+    echo json_encode(['ok' => true]);
+}
+
+/**
+ * DELETE /api/admin/invites/{token}  (admin autenticado)
+ * Remove convite não utilizado.
+ */
+function handle_admin_delete_invite(PDO $db, string $token): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    // Não permite excluir convite já utilizado
+    $check = $db->prepare('SELECT used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1');
+    $check->execute([$token, $couple_id]);
+    $row = $check->fetch();
+
+    if (!$row) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Convite não encontrado.']);
+        return;
+    }
+
+    if ($row['used']) {
+        http_response_code(409);
+        echo json_encode(['error' => 'Não é possível excluir um convite já utilizado.']);
+        return;
+    }
+
+    $db->prepare('DELETE FROM invite_tokens WHERE token = ? AND couple_id = ?')
+       ->execute([$token, $couple_id]);
+
+    http_response_code(200);
+    echo json_encode(['ok' => true]);
 }

@@ -80,7 +80,32 @@ CREATE TABLE IF NOT EXISTS alvar028_casamentos.rsvp_responses (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 4. ITENS DA LISTA DE PRESENTES
+-- 4. TOKENS DE CONVITE
+--    Cada convidado/família recebe um token único enviado via WhatsApp ou e-mail.
+--    O token é consumido (used=1) ao confirmar presença — não pode ser reutilizado.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS alvar028_casamentos.invite_tokens (
+  id          CHAR(36)      NOT NULL,
+  couple_id   CHAR(36)      NOT NULL,
+  token       VARCHAR(32)   NOT NULL,
+  guest_name  VARCHAR(255)  NOT NULL,
+  whatsapp    VARCHAR(30)   NULL,
+  email       VARCHAR(255)  NULL,
+  sent        TINYINT(1)    NOT NULL DEFAULT 0,
+  sent_at     DATETIME      NULL,
+  used        TINYINT(1)    NOT NULL DEFAULT 0,
+  used_at     DATETIME      NULL,
+  created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  UNIQUE  KEY uq_token           (token),
+  INDEX       idx_couple_used    (couple_id, used),
+  INDEX       idx_couple_created (couple_id, created_at),
+  FOREIGN KEY (couple_id) REFERENCES alvar028_casamentos.couples(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 5. ITENS DA LISTA DE PRESENTES
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS alvar028_casamentos.gift_items (
   id               CHAR(36)      NOT NULL,

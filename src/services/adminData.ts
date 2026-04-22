@@ -19,6 +19,7 @@ import type {
   SiteEditorContent,
   SiteEditorRoom,
   AdminGiftItem,
+  InviteToken,
 } from '../types/admin';
 import { invalidateWeddingConfigCache } from './weddingConfig';
 
@@ -197,4 +198,41 @@ export async function updateAdminGift(id: string, gift: Omit<AdminGiftItem, 'id'
 export async function deleteAdminGift(id: string): Promise<void> {
   await apiWrite('DELETE', `/admin/gifts/${id}`);
   invalidateWeddingConfigCache();
+}
+
+// ── Admin: Convites ───────────────────────────────────────────────────────────
+
+export async function fetchInviteTokens(): Promise<InviteToken[]> {
+  return apiGet<InviteToken[]>('/admin/invites');
+}
+
+export async function createInviteToken(data: {
+  guest_name: string;
+  whatsapp?: string;
+  email?: string;
+}): Promise<InviteToken> {
+  const res  = await apiWrite('POST', '/admin/invites', data);
+  return res.json() as Promise<InviteToken>;
+}
+
+export async function sendInviteEmail(token: string): Promise<void> {
+  await apiWrite('POST', `/admin/invites/${token}/send-email`);
+}
+
+export async function markInviteSent(token: string): Promise<void> {
+  await apiWrite('POST', `/admin/invites/${token}/mark-sent`);
+}
+
+export async function deleteInviteToken(token: string): Promise<void> {
+  await apiWrite('DELETE', `/admin/invites/${token}`);
+}
+
+export async function validateInviteToken(
+  token: string,
+  couple: string
+): Promise<{ valid: boolean; guest_name: string | null; used: boolean }> {
+  const res = await fetch(
+    `${API}/invites/validate?token=${encodeURIComponent(token)}&couple=${encodeURIComponent(couple)}`
+  );
+  return res.json() as Promise<{ valid: boolean; guest_name: string | null; used: boolean }>;
 }

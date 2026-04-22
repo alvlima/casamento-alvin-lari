@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Gift, CheckCircle2 } from 'lucide-react';
+import { Zap, Gift, CheckCircle2, Heart } from 'lucide-react';
 
 interface IntroScreenProps {
   introTitle:    string;
@@ -22,9 +22,9 @@ export const IntroScreen = memo(({ introTitle, introSubtitle, homeName, onStart,
     <motion.div
       animate={{ y: [0, -10, 0] }}
       transition={{ repeat: Infinity, duration: 3 }}
-      className="mb-8 inline-block"
+      className="mb-8 inline-block p-4 bg-white rounded-full shadow-2xl text-[#E8C9B5]"
     >
-      <img src="/nome.png" alt="Álvaro & Larissa" className="w-64 md:w-80 drop-shadow-xl" />
+      <Heart size={48} fill="currentColor" />
     </motion.div>
 
     <h1 className="text-6xl md:text-8xl font-serif mb-6 leading-tight text-slate-900 tracking-tighter">

@@ -12,6 +12,22 @@ export interface Couple {
   created_at: string;
 }
 
+// ── Convites ─────────────────────────────────────────────────────────────────
+
+export interface InviteToken {
+  id:         string;
+  token:      string;
+  guest_name: string;
+  whatsapp:   string | null;
+  email:      string | null;
+  sent:       boolean;
+  sent_at:    string | null;
+  used:       boolean;
+  used_at:    string | null;
+  created_at: string;
+  invite_url: string;
+}
+
 // ── RSVP ────────────────────────────────────────────────────────────────────
 
 export interface RsvpResponse {
