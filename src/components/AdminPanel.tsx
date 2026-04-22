@@ -31,6 +31,7 @@ import {
   sendInviteEmail,
   markInviteSent,
   deleteInviteToken,
+  updateInviteToken,
 } from '../services/adminData';
 import type {
   DashboardStats,
@@ -460,6 +461,15 @@ function useInvites() {
     } catch (e) { setMsg((e as Error).message); }
   }, []);
 
+  const handleUpdate = useCallback(async (token: string, data: { guest_name: string; whatsapp?: string; email?: string }) => {
+    try {
+      await updateInviteToken(token, data);
+      setInvites((prev) => prev.map((i) => i.token === token
+        ? { ...i, guest_name: data.guest_name, whatsapp: data.whatsapp ?? null, email: data.email ?? null }
+        : i));
+    } catch (e) { setMsg((e as Error).message); }
+  }, []);
+
   const addInvite = useCallback((inv: InviteToken) => {
     setInvites((prev) => [inv, ...prev]);
   }, []);
@@ -470,7 +480,7 @@ function useInvites() {
     return { label: 'Aguardando', color: 'bg-stone-100 text-stone-500' };
   };
 
-  return { invites, loading, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, addInvite, getStatus };
+  return { invites, loading, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, handleUpdate, addInvite, getStatus };
 }
 
 // Formulário de cadastro — só o form, sem lista
@@ -527,7 +537,27 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'declined'>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { invites, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, addInvite } = useInvites();
+  const { invites, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, handleUpdate, addInvite } = useInvites();
+  const [editingToken, setEditingToken] = useState<string | null>(null);
+  const [editName,     setEditName]     = useState('');
+  const [editWa,       setEditWa]       = useState('');
+  const [editEmail,    setEditEmail]    = useState('');
+  const [editSaving,   setEditSaving]   = useState(false);
+
+  const startEdit = useCallback((inv: InviteToken) => {
+    setEditingToken(inv.token);
+    setEditName(inv.guest_name);
+    setEditWa(inv.whatsapp ?? '');
+    setEditEmail(inv.email ?? '');
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editingToken || !editName.trim()) return;
+    setEditSaving(true);
+    await handleUpdate(editingToken, { guest_name: editName.trim(), whatsapp: editWa.trim() || undefined, email: editEmail.trim() || undefined });
+    setEditSaving(false);
+    setEditingToken(null);
+  }, [editingToken, editName, editWa, editEmail, handleUpdate]);
 
   const filtered = useMemo(() => {
     return responses.filter((r) => {
@@ -577,34 +607,65 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
           <p className="px-4 pt-3 pb-1 text-[10px] font-black uppercase tracking-widest text-stone-400">Aguardando resposta</p>
           <div className="divide-y divide-stone-50">
             {invites.filter((i) => !i.used).map((inv) => (
-              <div key={inv.token} className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-stone-900 truncate">{inv.guest_name}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {inv.whatsapp && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Phone size={9} />{inv.whatsapp}</span>}
-                    {inv.email    && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Mail size={9} />{inv.email}</span>}
-                    {inv.sent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Enviado</span>}
+              <div key={inv.token}>
+                {editingToken === inv.token ? (
+                  /* Form de edição inline */
+                  <div className="px-4 py-3 space-y-2 bg-stone-50">
+                    <input value={editName} onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Nome *" className={inputCls} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={editWa} onChange={(e) => setEditWa(e.target.value)}
+                        placeholder="WhatsApp" className={inputCls} />
+                      <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="E-mail" type="email" className={inputCls} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={saveEdit} disabled={editSaving || !editName.trim()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-[#94A684] disabled:opacity-40 transition-all">
+                        {editSaving ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} />}
+                        Salvar
+                      </button>
+                      <button onClick={() => setEditingToken(null)}
+                        className="px-3 py-1.5 bg-white text-stone-500 rounded-lg text-xs font-bold border border-stone-200 hover:bg-stone-100 transition-all">
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => handleCopy(inv.invite_url, inv.token)} title="Copiar link"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors">
-                    {copied === inv.token ? <Check size={13} className="text-[#94A684]" /> : <Link size={13} />}
-                  </button>
-                  {inv.whatsapp && (
-                    <button onClick={() => handleWhatsApp(inv)} title="Enviar via WhatsApp"
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-                      <Phone size={13} />
-                    </button>
-                  )}
-                  {inv.email && (
-                    <button onClick={() => handleEmail(inv)} disabled={emailSending === inv.token} title="Enviar e-mail"
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-sky-600 hover:bg-sky-50 transition-colors disabled:opacity-40">
-                      {emailSending === inv.token ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />}
-                    </button>
-                  )}
-                  <DeleteButton onConfirm={() => handleDelete(inv.token)} size="xs" />
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-stone-900 truncate">{inv.guest_name}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {inv.whatsapp && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Phone size={9} />{inv.whatsapp}</span>}
+                        {inv.email    && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Mail size={9} />{inv.email}</span>}
+                        {inv.sent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Enviado</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => startEdit(inv)} title="Editar"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => handleCopy(inv.invite_url, inv.token)} title="Copiar link"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors">
+                        {copied === inv.token ? <Check size={13} className="text-[#94A684]" /> : <Link size={13} />}
+                      </button>
+                      {inv.whatsapp && (
+                        <button onClick={() => handleWhatsApp(inv)} title="Enviar via WhatsApp"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                          <Phone size={13} />
+                        </button>
+                      )}
+                      {inv.email && (
+                        <button onClick={() => handleEmail(inv)} disabled={emailSending === inv.token} title="Enviar e-mail"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-sky-600 hover:bg-sky-50 transition-colors disabled:opacity-40">
+                          {emailSending === inv.token ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />}
+                        </button>
+                      )}
+                      <DeleteButton onConfirm={() => handleDelete(inv.token)} size="xs" />
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -666,6 +727,10 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                         {inv.email    && <span className="flex items-center gap-1 text-xs text-stone-500"><Mail size={11} />{inv.email}</span>}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => startEdit(inv)} title="Editar"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-200 transition-colors">
+                          <Pencil size={12} />
+                        </button>
                         <button onClick={() => handleCopy(inv.invite_url, inv.token)} title="Copiar link"
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-200 transition-colors">
                           {copied === inv.token ? <Check size={12} className="text-[#94A684]" /> : <Link size={12} />}
@@ -682,6 +747,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                             {emailSending === inv.token ? <RefreshCw size={12} className="animate-spin" /> : <Mail size={12} />}
                           </button>
                         )}
+                        <DeleteButton onConfirm={() => handleDelete(inv.token)} size="xs" />
                       </div>
                     </div>
                   )}

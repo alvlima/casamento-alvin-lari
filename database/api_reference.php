@@ -182,6 +182,8 @@ elseif  ($method === 'POST'   && str_starts_with($path, '/admin/invites/') && st
                                                                    handle_admin_send_invite_email($db, substr($path, 15, -11));
 elseif  ($method === 'POST'   && str_starts_with($path, '/admin/invites/') && str_ends_with($path, '/mark-sent'))
                                                                    handle_admin_mark_invite_sent($db, substr($path, 15, -10));
+elseif  ($method === 'PUT'    && str_starts_with($path, '/admin/invites/'))
+                                                                   handle_admin_update_invite($db, substr($path, 15));
 elseif  ($method === 'DELETE' && str_starts_with($path, '/admin/invites/'))
                                                                    handle_admin_delete_invite($db, substr($path, 15));
 else    { http_response_code(404); echo json_encode(['error' => 'Rota não encontrada.']); }
@@ -1952,29 +1954,50 @@ function handle_admin_mark_invite_sent(PDO $db, string $token): void
  * DELETE /api/admin/invites/{token}  (admin autenticado)
  * Remove convite não utilizado.
  */
-function handle_admin_delete_invite(PDO $db, string $token): void
+/**
+ * PUT /api/admin/invites/{token}
+ * Body: { guest_name, whatsapp?, email? }
+ */
+function handle_admin_update_invite(PDO $db, string $token): void
 {
-    $couple_id = get_authenticated_couple_id($db);
+    $couple_id  = get_authenticated_couple_id($db);
+    $body       = json_input();
+    $guest_name = substr(trim(strip_tags($body['guest_name'] ?? '')), 0, 255);
+    $whatsapp   = substr(trim(strip_tags($body['whatsapp']   ?? '')), 0, 30)  ?: null;
+    $email      = filter_var(trim($body['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null;
 
-    // Não permite excluir convite já utilizado
-    $check = $db->prepare('SELECT used FROM invite_tokens WHERE token = ? AND couple_id = ? LIMIT 1');
-    $check->execute([$token, $couple_id]);
-    $row = $check->fetch();
+    if (!$guest_name) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Nome obrigatório.']);
+        return;
+    }
 
-    if (!$row) {
+    $stmt = $db->prepare(
+        'UPDATE invite_tokens SET guest_name = ?, whatsapp = ?, email = ? WHERE token = ? AND couple_id = ?'
+    );
+    $stmt->execute([$guest_name, $whatsapp, $email, $token, $couple_id]);
+
+    if ($stmt->rowCount() === 0) {
         http_response_code(404);
         echo json_encode(['error' => 'Convite não encontrado.']);
         return;
     }
 
-    if ($row['used']) {
-        http_response_code(409);
-        echo json_encode(['error' => 'Não é possível excluir um convite já utilizado.']);
+    echo json_encode(['ok' => true]);
+}
+
+function handle_admin_delete_invite(PDO $db, string $token): void
+{
+    $couple_id = get_authenticated_couple_id($db);
+
+    $stmt = $db->prepare('DELETE FROM invite_tokens WHERE token = ? AND couple_id = ?');
+    $stmt->execute([$token, $couple_id]);
+
+    if ($stmt->rowCount() === 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Convite não encontrado.']);
         return;
     }
-
-    $db->prepare('DELETE FROM invite_tokens WHERE token = ? AND couple_id = ?')
-       ->execute([$token, $couple_id]);
 
     http_response_code(200);
     echo json_encode(['ok' => true]);
