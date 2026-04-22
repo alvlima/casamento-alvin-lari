@@ -202,6 +202,21 @@ export async function deleteAdminGift(id: string): Promise<void> {
 
 // ── Admin: Convites ───────────────────────────────────────────────────────────
 
+// ── Admin: RSVP ───────────────────────────────────────────────────────────────
+
+export async function updateAdminRsvp(
+  id: string,
+  data: { name: string; attendance: 0 | 1; message?: string }
+): Promise<void> {
+  await apiWrite('PUT', `/admin/rsvp/${id}`, data);
+}
+
+export async function deleteAdminRsvp(id: string): Promise<void> {
+  await apiWrite('DELETE', `/admin/rsvp/${id}`);
+}
+
+// ── Admin: Convites ───────────────────────────────────────────────────────────
+
 export async function fetchInviteTokens(): Promise<InviteToken[]> {
   return apiGet<InviteToken[]>('/admin/invites');
 }
