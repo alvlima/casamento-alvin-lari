@@ -7,7 +7,7 @@ import {
   Settings, Eye, EyeOff, Check, AlertCircle,
   Coffee, Plane, Cat, Wine, Heart, Pizza, BookOpen, Gamepad2,
   Sparkles, Home, Star, Music, Camera, ShoppingBag, Leaf, Trophy,
-  Send, Copy, Mail, Phone, Link,
+  Mail, Phone, Link,
 } from 'lucide-react';
 import {
   fetchDashboardStats,

@@ -8,7 +8,7 @@ interface FloatingMenuProps {
   onGoHome:       () => void;
 }
 
-export const FloatingMenu = memo(({ onShowRSVP, onShowGiftList, onGoHome }: FloatingMenuProps) => {
+export const FloatingMenu = memo(({ onShowRSVP }: FloatingMenuProps) => {
   const [open, setOpen] = useState(false);
 
   const toggle = useCallback(() => setOpen((v) => !v), []);

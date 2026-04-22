@@ -62,6 +62,7 @@ export interface GiftContribution {
   gift_title: string;
   amount: number;
   contributor: string | null;
+  payment_method: string | null;
   created_at: string;
 }
 
