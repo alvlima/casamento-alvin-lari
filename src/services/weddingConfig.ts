@@ -15,10 +15,10 @@ const COUPLE = 'alvin-lari';
 
 export interface CoupleConfig {
   name:             string;   // "Álvaro & Larissa"
-  home_name:        string;   // "AP Patinhas"
-  partner1:         string;   // "Alvaro"
+  home_name:        string;   // "Apê Patinhas"
+  partner1:         string;   // "Álvaro"
   partner2:         string;   // "Larissa"
-  wedding_date:     string;   // ISO: "2026-08-01"
+  wedding_date:     string;   // ISO: "2026-07-18"
   wedding_location: string;
   wedding_time:     string;   // "16:00"
 }
