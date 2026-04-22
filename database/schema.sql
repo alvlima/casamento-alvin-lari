@@ -270,9 +270,9 @@ INSERT IGNORE INTO alvar028_casamentos.couples
 VALUES (
   'a1b2c3d4-e5f6-4789-abcd-000000000001',
   'alvin-lari',
-  'Alvaro',
+  'Álvaro',
   'Larissa',
-  '2026-08-01',
+  '2026-07-18',
   '16:00',
   'Mogi das Cruzes, SP',
   'alvaro.soares01@hotmail.com',
@@ -280,11 +280,11 @@ VALUES (
   18.00,
   200,
   0.950,
-  'Larissa & Alvaro',
+  'Álvaro & Larissa',
   'AP Patinhas',
   'Um Convite | fora dos Dados.',
   'Projetamos cada detalhe do nosso lar. Agora, convidamos você para caminhar por ele antes do altar.',
-  '{"entrada":{"title":"O Portal","desc":"Você está diante da porta do AP Patinhas. Este é o início da nossa vida juntos. Para entrar, você deve estar disposto a compartilhar da nossa paz.","nextText":"Girar a Chave e Entrar"},"sala":{"title":"A Sala de Estar e Jantar","desc":"Um espaço de aconchego onde o místico e o lógico se encontram. O Elo de Afeto está escondido aqui — procure pelos nossos gatinhos.","nextText":"Seguir para os Escritórios"},"escritorio":{"title":"O Hub de Dualidade","desc":"De um lado, a introspecção e a alma da Larissa. Do outro, a mente veloz e os dados do Alvaro. Alinhe os dois mundos para seguir adiante.","nextText":"Ir para a Varanda"},"varanda":{"title":"O Altar da Varanda","desc":"Nosso quintal, nossa rede, nosso sim. Se você trouxe as chaves do Afeto, da Intuição e da Lógica, o caminho para o nosso altar está aberto."}}'
+  '{"entrada":{"title":"O Portal","desc":"Você está diante da porta do AP Patinhas. Este é o início da nossa vida juntos. Para entrar, você deve estar disposto a compartilhar da nossa paz.","nextText":"Girar a Chave e Entrar"},"sala":{"title":"A Sala de Estar e Jantar","desc":"Um espaço de aconchego onde o místico e o lógico se encontram. O Elo de Afeto está escondido aqui — procure pelos nossos gatinhos.","nextText":"Seguir para os Escritórios"},"escritorio":{"title":"O Hub de Dualidade","desc":"De um lado, a introspecção e a alma da Larissa. Do outro, a mente veloz e os dados do Álvaro. Alinhe os dois mundos para seguir adiante.","nextText":"Ir para a Varanda"},"varanda":{"title":"O Altar da Varanda","desc":"Nosso quintal, nossa rede, nosso sim. Se você trouxe as chaves do Afeto, da Intuição e da Lógica, o caminho para o nosso altar está aberto."}}'
 );
 
 -- Presentes (gift_items)

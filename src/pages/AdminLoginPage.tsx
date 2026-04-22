@@ -11,8 +11,8 @@ export default function AdminLoginPage() {
   const [visible,  setVisible]  = useState(false);
   const [error,    setError]    = useState(false);
   const [loading,  setLoading]  = useState(false);
-  const [coupleName, setCoupleName] = useState('Larissa & Alvaro');
-  const [homeName,   setHomeName]   = useState('AP Patinhas');
+  const [coupleName, setCoupleName] = useState('Álvaro & Larissa');
+  const [homeName,   setHomeName]   = useState('Álvaro & Larissa');
 
   useEffect(() => {
     fetchWeddingConfig()

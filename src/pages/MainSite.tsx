@@ -4,6 +4,7 @@ import { colors, type RoomId, type InventoryKey } from '../constants/theme';
 import { NavHUD } from '../components/NavHUD';
 import { IntroScreen } from '../components/IntroScreen';
 import { RoomView } from '../components/RoomView';
+import { FloatingMenu } from '../components/FloatingMenu';
 import { fetchWeddingConfig, formatWeddingDate, type RoomContent } from '../services/weddingConfig';
 
 const RSVPOverlay = lazy(() =>
@@ -21,12 +22,12 @@ export default function MainSite() {
   const [showGiftList,setShowGiftList]= useState(false);
 
   // Configurações do casal vindas do banco de dados
-  const [coupleName,     setCoupleName]     = useState('Larissa & Alvaro');
-  const [homeName,       setHomeName]       = useState('AP Patinhas');
+  const [coupleName,     setCoupleName]     = useState('Álvaro & Larissa');
+  const [homeName,       setHomeName]       = useState('Álvaro & Larissa');
   const [introTitle,     setIntroTitle]     = useState('Um Convite | fora dos Dados.');
   const [introSubtitle,  setIntroSubtitle]  = useState('Projetamos cada detalhe do nosso lar. Agora, convidamos você para caminhar por ele antes do altar.');
   const [weddingLocation,setWeddingLocation]= useState('Mogi das Cruzes, SP');
-  const [weddingDateStr, setWeddingDateStr] = useState('01 de Agosto, 2026 • 16:00h');
+  const [weddingDateStr, setWeddingDateStr] = useState('18 de Julho, 2026 • 16:00h');
   const [roomsConfig,    setRoomsConfig]    = useState<Record<string, RoomContent>>({});
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function MainSite() {
   }, []);
 
   const handleStart        = useCallback(() => setGameStarted(true), []);
+  const handleBack         = useCallback(() => { setGameStarted(false); setCurrentRoom('entrada'); }, []);
   const handleShowRSVP     = useCallback(() => setShowRSVP(true), []);
   const handleCloseRSVP    = useCallback(() => setShowRSVP(false), []);
   const handleShowGiftList = useCallback(() => setShowGiftList(true), []);
@@ -62,8 +64,8 @@ export default function MainSite() {
       </AnimatePresence>
 
       <main
-        className={`min-h-screen flex justify-center p-6 relative ${
-          gameStarted ? 'items-start pt-32 pb-16' : 'items-center'
+        className={`min-h-screen flex justify-center px-4 relative ${
+          gameStarted ? 'items-start pt-20 md:pt-28 pb-12 md:pb-16' : 'items-center p-6'
         }`}
       >
         <AnimatePresence mode="wait">
@@ -87,6 +89,7 @@ export default function MainSite() {
               weddingDateStr={weddingDateStr}
               onCollect={handleCollect}
               onNavigate={handleNavigate}
+              onBack={handleBack}
               onShowRSVP={handleShowRSVP}
               onShowGiftList={handleShowGiftList}
             />
@@ -94,16 +97,15 @@ export default function MainSite() {
         </AnimatePresence>
       </main>
 
-      {gameStarted && (
-        <div className="fixed bottom-10 left-10 hidden md:block">
-          <div className="p-4 bg-white/40 backdrop-blur rounded-2xl border border-white/50 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#94A684] animate-pulse" />
-              Sincronizando Lar &amp; Alma
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {(gameStarted || showRSVP || showGiftList) && (
+          <FloatingMenu
+            onShowRSVP={handleShowRSVP}
+            onShowGiftList={handleShowGiftList}
+            onGoHome={handleBack}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showRSVP && (

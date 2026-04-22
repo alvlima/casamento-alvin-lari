@@ -87,12 +87,12 @@ CREATE TABLE IF NOT EXISTS raffle_prizes (
 -- -----------------------------------------------------------------------------
 
 UPDATE couples
-   SET couple_display_name  = 'Larissa & Alvaro',
+   SET couple_display_name  = 'Álvaro & Larissa',
        home_name            = 'AP Patinhas',
        site_intro_title     = 'Um Convite | fora dos Dados.',
        site_intro_subtitle  = 'Projetamos cada detalhe do nosso lar. Agora, convidamos você para caminhar por ele antes do altar.',
        wedding_time         = '16:00',
-       rooms_config         = '{"entrada":{"title":"O Portal","desc":"Você está diante da porta do AP Patinhas.","nextText":"Girar a Chave e Entrar"},"sala":{"title":"A Sala de Estar e Jantar","desc":"Um espaço de aconchego onde o místico e o lógico se encontram.","nextText":"Seguir para os Escritórios"},"escritorio":{"title":"O Hub de Dualidade","desc":"De um lado, a introspecção da Larissa. Do outro, a mente veloz do Alvaro.","nextText":"Ir para a Varanda"},"varanda":{"title":"O Altar da Varanda","desc":"Nosso quintal, nossa rede, nosso sim."}}'
+       rooms_config         = '{"entrada":{"title":"O Portal","desc":"Você está diante da porta do AP Patinhas.","nextText":"Girar a Chave e Entrar"},"sala":{"title":"A Sala de Estar e Jantar","desc":"Um espaço de aconchego onde o místico e o lógico se encontram.","nextText":"Seguir para os Escritórios"},"escritorio":{"title":"O Hub de Dualidade","desc":"De um lado, a introspecção da Larissa. Do outro, a mente veloz do Álvaro.","nextText":"Ir para a Varanda"},"varanda":{"title":"O Altar da Varanda","desc":"Nosso quintal, nossa rede, nosso sim."}}'
  WHERE slug = 'alvin-lari'
    AND (couple_display_name = '' OR couple_display_name IS NULL);
 
