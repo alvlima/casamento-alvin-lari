@@ -14,7 +14,7 @@ import {
   type PixResult,
   type CardPaymentInput,
 } from '../services/rifaData';
-import { fetchWeddingConfig } from '../services/weddingConfig';
+import { fetchWeddingConfig, invalidateWeddingConfigCache } from '../services/weddingConfig';
 import { ensureMPInitialized, IS_MP_READY } from '../lib/mercadopago';
 
 // ── Estilo visual dos prêmios por posição (estático — só títulos vêm da API) ──
@@ -458,7 +458,7 @@ export default function RifaPage() {
   const [modalOpen,       setModalOpen]       = useState(false);
 
   // Config carregada do banco — defaults enquanto aguarda
-  const [coupleName,    setCoupleName]    = useState('Larissa & Alvaro');
+  const [coupleName,    setCoupleName]    = useState('Álvaro & Larissa');
   const [ticketPrice,   setTicketPrice]   = useState(18);
   const [totalTickets,  setTotalTickets]  = useState(200);
   const [drawTarget,    setDrawTarget]    = useState(180);
@@ -473,8 +473,9 @@ export default function RifaPage() {
   // Inicializa o SDK do MP cedo para ter tempo de carregar antes do Brick ser montado
   useEffect(() => { ensureMPInitialized(); }, []);
 
-  // Carga inicial — config + bilhetes em paralelo
+  // Carga inicial — invalida cache e busca config + bilhetes em paralelo
   useEffect(() => {
+    invalidateWeddingConfigCache();
     Promise.all([fetchRaffleTickets(), fetchWeddingConfig()])
       .then(([{ sold, pending }, cfg]) => {
         setSoldTickets(sold);
@@ -571,7 +572,7 @@ export default function RifaPage() {
           className="inline-flex items-center justify-center w-14 h-14 bg-white/10 rounded-2xl mb-5">
           <Ticket size={28} />
         </motion.div>
-        <p className="text-white/50 text-[10px] font-black uppercase tracking-[0.5em] mb-2">{coupleName}</p>
+        <p className="font-script text-3xl text-white/70 mb-2">{coupleName}</p>
         <h1 className="text-3xl md:text-4xl font-serif font-bold mb-2">Rifa do Chá de Casa Nova</h1>
 
         <div className="mt-8 max-w-sm mx-auto">

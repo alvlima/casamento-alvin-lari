@@ -974,8 +974,9 @@ function handle_rifa_pay_card(PDO $db): void
         $id_list = implode(',', array_fill(0, count($ticket_ids), '?'));
         $db->prepare("UPDATE raffle_tickets SET payment_status = 'cancelled' WHERE id IN ({$id_list})")
            ->execute($ticket_ids);
+        error_log('[MP-RIFA-ERROR] ' . $e->getMessage());
         http_response_code(502);
-        echo json_encode(['error' => 'Falha ao conectar com Mercado Pago.']);
+        echo json_encode(['error' => $e->getMessage()]);
     }
 }
 
@@ -1004,6 +1005,12 @@ function handle_gifts_pay_card(PDO $db): void
     if (!$gift_title || $amount < 1 || !$token || !$payment_method_id || !$payer_email) {
         http_response_code(422);
         echo json_encode(['error' => 'Dados inválidos.']);
+        return;
+    }
+
+    if (!MP_ACCESS_TOKEN) {
+        http_response_code(503);
+        echo json_encode(['error' => 'Credencial MP_ACCESS_TOKEN não configurada no servidor.']);
         return;
     }
 
@@ -1049,6 +1056,9 @@ function handle_gifts_pay_card(PDO $db): void
     if ($issuer_id)   $payload['issuer_id']               = (int) $issuer_id;
     if ($payer_ident) $payload['payer']['identification'] = $payer_ident;
 
+    // Log temporário — remover após diagnóstico
+    error_log('[MP-GIFT-DEBUG] token=' . substr($token, 0, 20) . ' method=' . $payment_method_id . ' issuer=' . ($issuer_id ?? 'null') . ' amount=' . $amount . ' email=' . $payer_email);
+
     try {
         $res        = mp_request('POST', '/v1/payments', $payload, "{$contribution_id}-card");
         $mp_status  = $res['status'] ?? 'unknown';
@@ -1074,8 +1084,9 @@ function handle_gifts_pay_card(PDO $db): void
 
     } catch (\RuntimeException $e) {
         $db->prepare('DELETE FROM gift_contributions WHERE id = ?')->execute([$contribution_id]);
+        error_log('[MP-GIFT-ERROR] ' . $e->getMessage());
         http_response_code(502);
-        echo json_encode(['error' => 'Falha ao conectar com Mercado Pago.']);
+        echo json_encode(['error' => $e->getMessage()]);
     }
 }
 

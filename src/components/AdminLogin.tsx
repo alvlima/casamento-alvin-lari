@@ -57,7 +57,7 @@ export const AdminLogin = memo(({ onSuccess, onClose }: AdminLoginProps) => {
             <Lock size={24} />
           </div>
           <h2 className="text-2xl font-serif text-slate-900">Área dos Noivos</h2>
-          <p className="text-slate-400 text-sm mt-1 italic">Acesso restrito a Larissa & Alvaro</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400 mt-2">Álvaro & Larissa</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -103,7 +103,7 @@ export const AdminLogin = memo(({ onSuccess, onClose }: AdminLoginProps) => {
 
         <div className="flex items-center justify-center gap-1.5 mt-6">
           <Heart size={10} className="text-[#E8C9B5]" fill="currentColor" />
-          <p className="text-[10px] text-slate-400 italic">AP Patinhas — painel privado</p>
+          <p className="font-script text-lg text-slate-400">Álvaro & Larissa</p>
           <Heart size={10} className="text-[#E8C9B5]" fill="currentColor" />
         </div>
       </motion.div>

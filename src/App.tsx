@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
-// Rotas lazy — zero peso para quem não acessa
+const MainSite       = lazy(() => import('./pages/MainSite'));
 const AdminLoginPage = lazy(() => import('./pages/AdminLoginPage'));
 const AdminPanelPage = lazy(() => import('./pages/AdminPanelPage'));
 const RifaPage       = lazy(() => import('./pages/RifaPage'));
@@ -9,7 +9,15 @@ const RifaPage       = lazy(() => import('./pages/RifaPage'));
 export default function App() {
   return (
     <Routes>
-      {/* Rifa do Chá de Casa Nova */}
+      <Route
+        path="/"
+        element={
+          <Suspense fallback={null}>
+            <MainSite />
+          </Suspense>
+        }
+      />
+
       <Route
         path="/rifa"
         element={
@@ -19,7 +27,6 @@ export default function App() {
         }
       />
 
-      {/* Painel admin */}
       <Route
         path="/login"
         element={
@@ -28,6 +35,7 @@ export default function App() {
           </Suspense>
         }
       />
+
       <Route
         path="/admin"
         element={
@@ -37,8 +45,7 @@ export default function App() {
         }
       />
 
-      {/* Qualquer outra rota → /rifa */}
-      <Route path="*" element={<Navigate to="/rifa" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

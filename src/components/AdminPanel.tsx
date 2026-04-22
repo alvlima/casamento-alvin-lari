@@ -950,11 +950,11 @@ const SiteTab = memo(({ data, onRefresh }: { data: AdminSiteData; onRefresh: () 
       <Section title="Casal — nomes, data e local" defaultOpen>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Nome de exibição" hint="Aparece no cabeçalho do site">
-            <input className={inputCls} placeholder="Larissa & Alvaro" value={couple.display_name}
+            <input className={inputCls} placeholder="Álvaro & Larissa" value={couple.display_name}
               onChange={(e) => setCouple((c) => ({ ...c, display_name: e.target.value }))} />
           </Field>
           <Field label="Nome do apartamento" hint="Usado no jogo de exploração">
-            <input className={inputCls} placeholder="AP Patinhas" value={couple.home_name}
+            <input className={inputCls} placeholder="Álvaro & Larissa" value={couple.home_name}
               onChange={(e) => setCouple((c) => ({ ...c, home_name: e.target.value }))} />
           </Field>
           <Field label="Nome — Parceiro 1">
@@ -1275,7 +1275,7 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[9px] font-black uppercase tracking-[0.5em] text-[#94A684]">Painel Privado</p>
-            <h1 className="text-lg font-serif text-stone-900 leading-tight">Larissa &amp; Alvaro</h1>
+            <h1 className="text-[10px] font-black uppercase tracking-[0.5em] text-stone-900 mt-0.5">Álvaro & Larissa</h1>
           </div>
           <div className="flex items-center gap-1.5">
             <button onClick={load} disabled={loading} aria-label="Recarregar"

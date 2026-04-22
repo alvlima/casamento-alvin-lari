@@ -14,7 +14,7 @@ const COUPLE = 'alvin-lari';
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export interface CoupleConfig {
-  name:             string;   // "Larissa & Alvaro"
+  name:             string;   // "Álvaro & Larissa"
   home_name:        string;   // "AP Patinhas"
   partner1:         string;   // "Alvaro"
   partner2:         string;   // "Larissa"

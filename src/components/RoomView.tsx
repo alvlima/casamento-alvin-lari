@@ -1,6 +1,6 @@
 import { memo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Cat, Code, Sparkles, Heart, DoorOpen, ArrowRight, Lock, MapPin, Calendar, Music, Gift } from 'lucide-react';
+import { Cat, Code, Sparkles, Heart, DoorOpen, ArrowRight, ArrowLeft, Lock, MapPin, Calendar, Music, Gift } from 'lucide-react';
 import { colors, type RoomId, type InventoryKey } from '../constants/theme';
 import type { RoomContent } from '../services/weddingConfig';
 
@@ -84,7 +84,7 @@ interface VarandaContentProps {
 const VarandaContent = memo(({ allKeysCollected, weddingLocation, weddingDateStr, onShowRSVP, onShowGiftList }: VarandaContentProps) => {
   if (!allKeysCollected) {
     return (
-      <div className="p-8 bg-slate-100/80 backdrop-blur rounded-[30px] flex items-center gap-6 border-2 border-dashed border-slate-200">
+      <div className="p-5 md:p-8 bg-slate-100/80 backdrop-blur rounded-[24px] md:rounded-[30px] flex items-center gap-4 md:gap-6 border-2 border-dashed border-slate-200">
         <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-slate-300 shadow-inner">
           <Lock size={28} />
         </div>
@@ -104,13 +104,13 @@ const VarandaContent = memo(({ allKeysCollected, weddingLocation, weddingDateStr
     <motion.div
       initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className="bg-white p-10 rounded-[40px] shadow-2xl border-2 border-[#94A684] relative overflow-hidden"
+      className="bg-white p-6 md:p-10 rounded-[28px] md:rounded-[40px] shadow-2xl border-2 border-[#94A684] relative overflow-hidden"
     >
       <div className="absolute top-0 right-0 p-6 opacity-10">
         <Music size={80} />
       </div>
-      <h3 className="text-3xl font-serif mb-6 text-[#94A684]">Alinhamento Completo!</h3>
-      <div className="space-y-4 mb-8">
+      <h3 className="text-2xl md:text-3xl font-serif mb-4 md:mb-6 text-[#94A684]">Alinhamento Completo!</h3>
+      <div className="space-y-3 mb-5 md:mb-8">
         <div className="flex items-center gap-4 text-slate-600">
           <MapPin size={20} className="text-[#94A684]" />
           <span className="font-bold">{weddingLocation}</span>
@@ -142,6 +142,12 @@ VarandaContent.displayName = 'VarandaContent';
 
 // ── Main RoomView ───────────────────────────────────────────────────────────
 
+const PREV_ROOM: Partial<Record<RoomId, RoomId>> = {
+  sala:       'entrada',
+  escritorio: 'sala',
+  varanda:    'escritorio',
+};
+
 interface RoomViewProps {
   currentRoom:      RoomId;
   inventory:        InventoryKey[];
@@ -150,57 +156,73 @@ interface RoomViewProps {
   weddingDateStr:   string;
   onCollect:        (key: InventoryKey) => void;
   onNavigate:       (room: RoomId) => void;
+  onBack:           () => void;
   onShowRSVP:       () => void;
   onShowGiftList:   () => void;
 }
 
 export const RoomView = memo(
-  ({ currentRoom, inventory, roomsConfig, weddingLocation, weddingDateStr, onCollect, onNavigate, onShowRSVP, onShowGiftList }: RoomViewProps) => {
+  ({ currentRoom, inventory, roomsConfig, weddingLocation, weddingDateStr, onCollect, onNavigate, onBack, onShowRSVP, onShowGiftList }: RoomViewProps) => {
     const visual          = ROOM_VISUAL[currentRoom];
     const content         = roomsConfig[currentRoom] ?? { title: currentRoom, desc: '' };
     const allKeysCollected = inventory.length >= 3;
+    const prevRoom        = PREV_ROOM[currentRoom];
 
     const handleNavigate = useCallback(() => {
       if (visual.next) onNavigate(visual.next);
     }, [visual.next, onNavigate]);
 
+    const handleBack = useCallback(() => {
+      if (prevRoom) onNavigate(prevRoom); else onBack();
+    }, [prevRoom, onNavigate, onBack]);
+
     return (
       <motion.div
         key={currentRoom}
-        initial={{ opacity: 0, x: 100 }}
+        initial={{ opacity: 0, x: 60 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -100 }}
-        className="w-full max-w-5xl grid md:grid-cols-2 gap-12 items-start md:items-center py-8"
+        exit={{ opacity: 0, x: -60 }}
+        className="w-full max-w-5xl grid md:grid-cols-2 gap-6 md:gap-12 items-start md:items-center py-2 md:py-8"
       >
         {/* Visual do Cômodo */}
         <div className="relative group perspective-1000">
           <motion.div
             initial={{ rotateY: -20, opacity: 0 }}
             animate={{ rotateY: 0, opacity: 1 }}
-            className="relative aspect-[4/5] md:aspect-square rounded-[40px] border-[12px] border-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.15)] flex items-center justify-center overflow-hidden"
+            className="relative aspect-[5/3] sm:aspect-[4/3] md:aspect-square rounded-[28px] md:rounded-[40px] border-[8px] md:border-[12px] border-white shadow-[0_30px_60px_-15px_rgba(0,0,0,0.12)] flex items-center justify-center overflow-hidden"
             style={{ backgroundColor: visual.bg }}
           >
             <div className="absolute inset-0 opacity-20 mix-blend-overlay pointer-events-none">
               <div className="w-full h-full bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[size:20px_20px]" />
             </div>
-            <div className="z-10 flex flex-col items-center gap-4">
-              {visual.icon}
-              <div className="text-slate-800 font-serif text-3xl text-center px-4 uppercase tracking-[0.3em]">
+            <div className="z-10 flex flex-col items-center gap-3">
+              <div className="scale-75 md:scale-100">{visual.icon}</div>
+              <div className="text-slate-800 font-serif text-xl md:text-3xl text-center px-4 uppercase tracking-[0.2em] md:tracking-[0.3em]">
                 {content.title}
               </div>
             </div>
           </motion.div>
-          <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-[#E8C9B5]/20 rounded-full blur-3xl" />
         </div>
 
         {/* Storytelling e Ações */}
-        <div className="space-y-10">
-          <div className="space-y-6">
-            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-[#94A684]">
-              Localização Atual
-            </span>
-            <h2 className="text-5xl font-serif text-slate-900 leading-tight">{content.title}</h2>
-            <p className="text-slate-600 text-lg leading-relaxed italic border-l-4 border-slate-200 pl-6">
+        <div className="space-y-5 md:space-y-10">
+          <div className="space-y-3 md:space-y-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-1.5 bg-white text-slate-600 hover:text-slate-900 hover:shadow-md px-3 py-1.5 rounded-xl shadow-sm border border-slate-100 transition-all group"
+                aria-label="Voltar"
+              >
+                <ArrowLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
+                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em]">Voltar</span>
+              </button>
+              <span className="text-slate-200">·</span>
+              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] md:tracking-[0.5em] text-[#94A684]">
+                Localização Atual
+              </span>
+            </div>
+            <h2 className="text-3xl md:text-5xl font-serif text-slate-900 leading-tight -mt-1">{content.title}</h2>
+            <p className="text-slate-600 text-base md:text-lg leading-relaxed italic border-l-4 border-slate-200 pl-4 md:pl-6">
               {content.desc}
             </p>
           </div>
@@ -210,7 +232,7 @@ export const RoomView = memo(
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="py-2"
+            className="py-1 md:py-2"
           >
             {currentRoom === 'sala' && (
               <SalaInteractive
@@ -223,17 +245,17 @@ export const RoomView = memo(
             )}
           </motion.div>
 
-          <div className="pt-4">
+          <div className="pt-1 md:pt-4">
             {visual.next && content.nextText && (
               <button
                 onClick={handleNavigate}
-                className="group flex items-center gap-4 bg-white px-8 py-5 rounded-2xl shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:shadow-slate-300 transition-all text-slate-900"
+                className="group flex items-center gap-3 md:gap-4 bg-white px-6 md:px-8 py-4 md:py-5 rounded-2xl shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:shadow-slate-300 transition-all text-slate-900"
               >
-                <span className="font-black uppercase tracking-widest text-sm">
+                <span className="font-black uppercase tracking-widest text-xs md:text-sm">
                   {content.nextText}
                 </span>
-                <div className="bg-slate-900 text-white p-2 rounded-lg group-hover:translate-x-2 transition-transform">
-                  <ArrowRight size={20} />
+                <div className="bg-slate-900 text-white p-1.5 md:p-2 rounded-lg group-hover:translate-x-2 transition-transform">
+                  <ArrowRight size={18} />
                 </div>
               </button>
             )}
