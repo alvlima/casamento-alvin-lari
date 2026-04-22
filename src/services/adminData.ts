@@ -223,6 +223,13 @@ export async function markInviteSent(token: string): Promise<void> {
   await apiWrite('POST', `/admin/invites/${token}/mark-sent`);
 }
 
+export async function updateInviteToken(
+  token: string,
+  data: { guest_name: string; whatsapp?: string; email?: string }
+): Promise<void> {
+  await apiWrite('PUT', `/admin/invites/${token}`, data);
+}
+
 export async function deleteInviteToken(token: string): Promise<void> {
   await apiWrite('DELETE', `/admin/invites/${token}`);
 }
