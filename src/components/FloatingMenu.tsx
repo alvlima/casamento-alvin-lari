@@ -1,6 +1,6 @@
 import { memo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, CheckCircle2, Gift, Home } from 'lucide-react';
+import { Menu, X, CheckCircle2 } from 'lucide-react';
 
 interface FloatingMenuProps {
   onShowRSVP:     () => void;
@@ -19,9 +19,7 @@ export const FloatingMenu = memo(({ onShowRSVP, onShowGiftList, onGoHome }: Floa
   }, []);
 
   const items = [
-    { icon: <Home size={18} />,         label: 'Início',              action: onGoHome,       color: 'bg-white text-slate-700 border border-slate-200' },
-    { icon: <Gift size={18} />,         label: 'Lista de Presentes',  action: onShowGiftList, color: 'bg-white text-slate-700 border border-slate-200' },
-    { icon: <CheckCircle2 size={18} />, label: 'Confirmar Presença',  action: onShowRSVP,     color: 'bg-[#94A684] text-white' },
+    { icon: <CheckCircle2 size={18} />, label: 'Confirmar Presença', action: onShowRSVP, color: 'bg-[#94A684] text-white' },
   ];
 
   return (

@@ -265,14 +265,14 @@ interface StatCardProps {
 }
 
 const StatCard = memo(({ label, value, icon, accent, sub }: StatCardProps) => (
-  <div className={`bg-white rounded-2xl p-5 border-l-4 ${accent} shadow-sm`}>
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">{label}</p>
-        <p className="text-3xl font-black text-stone-900 mt-1">{value}</p>
-        {sub && <p className="text-xs text-stone-400 mt-1">{sub}</p>}
+  <div className={`bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 ${accent} shadow-sm`}>
+    <div className="flex items-start justify-between gap-1">
+      <div className="min-w-0">
+        <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400 leading-tight">{label}</p>
+        <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 md:mt-1 leading-none">{value}</p>
+        {sub && <p className="text-[10px] md:text-xs text-stone-400 mt-0.5 md:mt-1 leading-tight">{sub}</p>}
       </div>
-      <div className="text-stone-300">{icon}</div>
+      <div className="text-stone-300 flex-shrink-0 hidden sm:block">{icon}</div>
     </div>
   </div>
 ));
@@ -510,6 +510,11 @@ const GiftsTab = memo(({ summaries, contributions }: { summaries: GiftSummary[];
     [summaries]
   );
 
+  const totalNet = useMemo(
+    () => contributions.reduce((s, c) => s + netValue(c.amount, c.payment_method), 0),
+    [contributions]
+  );
+
   const byGift = useMemo(() => {
     const map = new Map<string, GiftContribution[]>();
     for (const c of contributions) {
@@ -524,7 +529,8 @@ const GiftsTab = memo(({ summaries, contributions }: { summaries: GiftSummary[];
       <div className="bg-white rounded-2xl p-5 border-l-4 border-[#94A684] shadow-sm">
         <p className={labelCls}>Total arrecadado</p>
         <p className="text-4xl font-black text-stone-900 mt-1">R$ {fmt(totalAll)}</p>
-        <p className="text-xs text-stone-400 mt-1">{summaries.length} presente{summaries.length !== 1 ? 's' : ''} com contribuições</p>
+        <p className="text-xs text-[#94A684] font-semibold mt-0.5">R$ {fmt(totalNet)} líquido</p>
+        <p className="text-xs text-stone-400 mt-1">{summaries.length} presente{summaries.length !== 1 ? 's' : ''} com contribuições · Pix 1% · Cartão 3,98%</p>
       </div>
 
       {summaries.map((g) => {
@@ -565,7 +571,12 @@ const GiftsTab = memo(({ summaries, contributions }: { summaries: GiftSummary[];
                           </p>
                           <p className="text-xs text-stone-400">{fmtDate(c.created_at)}</p>
                         </div>
-                        <span className="text-sm font-black text-[#94A684]">R$ {fmt(c.amount)}</span>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-[#94A684]">R$ {fmt(c.amount)}</p>
+                          <p className="text-[10px] text-stone-400" title={c.payment_method === 'pix' ? 'Pix: 1% de taxa' : 'Cartão: 3,98% de taxa'}>
+                            liq. R$ {fmt(netValue(c.amount, c.payment_method))}
+                          </p>
+                        </div>
                       </div>
                     ))}
                   </div>

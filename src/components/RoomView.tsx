@@ -125,7 +125,7 @@ const VarandaContent = memo(({ allKeysCollected, weddingLocation, weddingDateStr
           onClick={onShowRSVP}
           className="w-full py-5 bg-[#94A684] text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-[#94A684]/20"
         >
-          Confirmar Presença no Rito
+          Confirmar Presença
         </button>
         <button
           onClick={onShowGiftList}

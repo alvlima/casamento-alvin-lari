@@ -13,7 +13,7 @@ src/
   main.tsx                   # Entry point — StrictMode + createRoot
   index.css                  # @import "tailwindcss" + resets + utilities globais
   constants/
-    theme.ts                 # Paleta de cores AP Patinhas, tipos RoomId / InventoryKey
+    theme.ts                 # Paleta de cores Apê Patinhas, tipos RoomId / InventoryKey
   types/
     admin.ts                 # Interfaces TypeScript do domínio admin
   services/
@@ -33,19 +33,12 @@ src/
 ## Regras de Performance — Frontend
 
 1. **Dados estáticos fora de componentes** — `ROOMS`, `colors`, `KEY_ICONS`, `GIFTS` são constantes de módulo. Nunca mova-os para dentro de funções ou componentes.
-
 2. **`React.memo` em tudo que não muda frequentemente** — todos os componentes filhos são memoizados. Mantenha esse padrão ao criar novos.
-
 3. **`useCallback` para handlers** — handlers passados como props devem sempre ser wrapped em `useCallback` no `App.tsx`.
-
 4. **`useMemo` para cálculos derivados** — listas filtradas, totais e agrupamentos no `AdminPanel` usam `useMemo`. Não recalcule na renderização.
-
 5. **Lazy loading de todos os overlays** — `RSVPOverlay`, `GiftList`, `AdminLogin` e `AdminPanel` são carregados via `React.lazy` + `Suspense`. Mantenha esse padrão para qualquer modal ou overlay futuro.
-
 6. **Code splitting de vendor** — `vite.config.ts` usa `manualChunks` para separar `framer-motion` e `lucide-react`. Não remova.
-
 7. **Props granulares** — `VarandaContent` recebe `allKeysCollected: boolean`, não o array `inventory` inteiro. Minimize o escopo de cada prop.
-
 8. **Carregamento paralelo no admin** — `AdminPanel` dispara `Promise.all([...4 queries...])` no `useEffect`. Nunca carregue os dados em série.
 
 ---
@@ -100,10 +93,10 @@ CREATE TABLE couples (
 
 ### Views pré-computadas
 
-| View | Uso |
-|---|---|
-| `v_rsvp_summary` | Total/confirmados/declinados por casal |
-| `v_gift_summary` | Total arrecadado por item, por casal |
+| View                   | Uso                                        |
+| ---------------------- | ------------------------------------------ |
+| `v_rsvp_summary`     | Total/confirmados/declinados por casal     |
+| `v_gift_summary`     | Total arrecadado por item, por casal       |
 | `v_couple_dashboard` | KPIs consolidados (JOIN de todas as views) |
 
 ### Como adicionar um novo casal
@@ -124,11 +117,8 @@ CREATE TABLE couples (
 ## Isolamento de Tenant — Regras Críticas
 
 1. **`couple_id` vem do token, nunca do request.** O frontend envia apenas o Bearer token. O backend PHP resolve o `couple_id` via `admin_sessions.token` — nunca aceite `couple_id` no body/query de rotas autenticadas.
-
 2. **Toda query autenticada filtra por `couple_id`.** Sem exceção. Ver `get_authenticated_couple_id()` em `database/api_reference.php`.
-
 3. **Rotas públicas (RSVP/gifts do convidado) usam o `slug` na query string** (`?couple=alvin-lari`) — o backend resolve o `couple_id` internamente.
-
 4. **`ON DELETE CASCADE`** em todas as FK para `couples.id` — deletar um casal limpa todos os seus dados automaticamente.
 
 ---
@@ -173,6 +163,7 @@ SELECT * FROM guest_tree ORDER BY depth, name;
 ```
 
 **Regras para CTEs recursivas:**
+
 1. Sempre defina `WHERE depth < N` como guard de profundidade.
 2. Use `UNION ALL` (não `UNION`) — duplicatas não existem em árvores e `UNION ALL` não faz dedup.
 3. Monitore `@@cte_max_recursion_depth` (padrão 1000) — ajuste se necessário.
@@ -185,15 +176,15 @@ SELECT * FROM guest_tree ORDER BY depth, name;
 
 ---
 
-## Paleta de Cores (AP Patinhas)
+## Paleta de Cores (Apê Patinhas)
 
-| Token           | Hex       | Uso                          |
-|----------------|-----------|------------------------------|
-| `damasco`       | `#E8C9B5` | Sala de estar (bg do cômodo) |
-| `sonhoAnjo`     | `#F2F1EC` | Background geral da página   |
-| `carvalhoDian`  | `#D6BC9D` | Borda do botão de afeto      |
-| `azulAstral`    | `#8FA9B8` | Escritório (bg do cômodo)    |
-| `tomilhoSeco`   | `#94A684` | Varanda, acentos verdes      |
+| Token            | Hex         | Uso                           |
+| ---------------- | ----------- | ----------------------------- |
+| `damasco`      | `#E8C9B5` | Sala de estar (bg do cômodo) |
+| `sonhoAnjo`    | `#F2F1EC` | Background geral da página   |
+| `carvalhoDian` | `#D6BC9D` | Borda do botão de afeto      |
+| `azulAstral`   | `#8FA9B8` | Escritório (bg do cômodo)   |
+| `tomilhoSeco`  | `#94A684` | Varanda, acentos verdes       |
 
 ---
 
@@ -208,11 +199,11 @@ Se `inventory.length === 3` → mostra card com data/local + botões RSVP e List
 
 ## Rotas
 
-| Rota | Componente | Descrição |
-|---|---|---|
-| `/` | `MainSite` | Site público do casamento |
-| `/login` | `AdminLoginPage` | Login dos noivos |
-| `/admin` | `AdminPanelPage` | Painel protegido (guard: `sessionStorage`) |
+| Rota       | Componente         | Descrição                                 |
+| ---------- | ------------------ | ------------------------------------------- |
+| `/`      | `MainSite`       | Site público do casamento                  |
+| `/login` | `AdminLoginPage` | Login dos noivos                            |
+| `/admin` | `AdminPanelPage` | Painel protegido (guard:`sessionStorage`) |
 
 Senha padrão: `alvinelari2026` — definida em `AdminLoginPage.tsx:ADMIN_PASSWORD`.
 Auth guard: `sessionStorage.getItem('admin_auth') === 'true'` — redireciona para `/login` se ausente.
@@ -250,13 +241,13 @@ O site é um **convite interativo estilo jogo de exploração**, não um site de
 
 ### Paleta e uso
 
-| Token          | Hex       | Onde usar                                             |
-|----------------|-----------|-------------------------------------------------------|
-| `sonhoAnjo`    | `#F2F1EC` | Background de toda a página — nunca branco puro       |
-| `damasco`      | `#E8C9B5` | Sala de estar, cards quentes, destaques principais    |
-| `carvalhoDian` | `#D6BC9D` | Bordas, separadores, botões secundários               |
-| `azulAstral`   | `#8FA9B8` | Escritório, badges informativos, links               |
-| `tomilhoSeco`  | `#94A684` | Varanda, badges de sucesso, acentos verdes            |
+| Token            | Hex         | Onde usar                                          |
+| ---------------- | ----------- | -------------------------------------------------- |
+| `sonhoAnjo`    | `#F2F1EC` | Background de toda a página — nunca branco puro  |
+| `damasco`      | `#E8C9B5` | Sala de estar, cards quentes, destaques principais |
+| `carvalhoDian` | `#D6BC9D` | Bordas, separadores, botões secundários          |
+| `azulAstral`   | `#8FA9B8` | Escritório, badges informativos, links            |
+| `tomilhoSeco`  | `#94A684` | Varanda, badges de sucesso, acentos verdes         |
 
 Texto principal: `#3d3531` (marrom escuro) — nunca `#000000` puro.
 Texto secundário / labels: `#7a6f66` (marrom médio).
@@ -270,11 +261,13 @@ Texto secundário / labels: `#7a6f66` (marrom médio).
 ### Componentes e padrões visuais
 
 **Cards de cômodo**
+
 - Fundo colorido por cômodo (damasco / azulAstral / tomilhoSeco)
 - Cantos arredondados `rounded-2xl`, sombra suave `shadow-md`
 - Transição de entrada: `opacity 0→1` + `translateY 20px→0` com `ease-out 0.4s`
 
 **Botões**
+
 - Primário: fundo `damasco` ou `azulAstral`, texto escuro, `rounded-xl`, sem bordas
 - Secundário: borda `carvalhoDian`, fundo transparente
 - Destrutivo (delete): vermelho `rose-600` com ícone — sempre pedir confirmação antes de executar
@@ -282,18 +275,21 @@ Texto secundário / labels: `#7a6f66` (marrom médio).
 - Nunca usar `cursor-pointer` sem um handler real associado
 
 **Formulários (admin)**
+
 - Labels acima do campo, em `text-xs font-medium text-[#7a6f66] uppercase tracking-wide`
 - Inputs: `border border-stone-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#8FA9B8]`
 - Mensagens de erro: `text-rose-600 text-xs mt-1` abaixo do campo
 - SaveBar (salvar/cancelar): sempre fixada na parte inferior da seção editada
 
 **Modais e overlays**
+
 - Backdrop: `bg-black/40 backdrop-blur-sm`
 - Painel do modal: `bg-[#F2F1EC] rounded-2xl shadow-xl`
 - Fechar: ícone X no canto superior direito, ou clique no backdrop
 - Nunca usar `alert()` ou `confirm()` nativos — criar componentes inline
 
 **NavHUD (barra de progresso)**
+
 - Fixa no topo, fina (4px), cor da barra reflete o cômodo atual
 - Não exibir no painel admin
 

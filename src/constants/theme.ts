@@ -1,4 +1,4 @@
-// Cores do Projeto AP Patinhas (extraídas do PDF)
+// Cores do Projeto Apê Patinhas (extraídas do PDF)
 export const colors = {
   damasco: '#E8C9B5',     // Coral/Damasco - Tinta Seda
   sonhoAnjo: '#F2F1EC',   // Off-white - Tinta Sonho de Anjo
