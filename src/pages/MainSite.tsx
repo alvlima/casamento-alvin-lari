@@ -40,6 +40,11 @@ export default function MainSite() {
       setWeddingDateStr(`${formatWeddingDate(cfg.couple.wedding_date)} • ${cfg.couple.wedding_time}h`);
       if (Object.keys(cfg.rooms).length > 0) setRoomsConfig(cfg.rooms);
     }).catch(() => {/* mantém os defaults */});
+
+    // Abre RSVP automaticamente quando há token de convite na URL
+    if (new URLSearchParams(window.location.search).has('invite')) {
+      setShowRSVP(true);
+    }
   }, []);
 
   const handleStart        = useCallback(() => setGameStarted(true), []);

@@ -410,13 +410,9 @@ OverviewTab.displayName = 'OverviewTab';
 
 // ── Invites section ───────────────────────────────────────────────────────────
 
-const InvitesSection = memo(() => {
+function useInvites() {
   const [invites,      setInvites]      = useState<InviteToken[]>([]);
   const [loading,      setLoading]      = useState(true);
-  const [guestName,    setGuestName]    = useState('');
-  const [whatsapp,     setWhatsapp]     = useState('');
-  const [email,        setEmail]        = useState('');
-  const [creating,     setCreating]     = useState(false);
   const [msg,          setMsg]          = useState('');
   const [copied,       setCopied]       = useState<string | null>(null);
   const [emailSending, setEmailSending] = useState<string | null>(null);
@@ -429,21 +425,6 @@ const InvitesSection = memo(() => {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = useCallback(async () => {
-    if (!guestName.trim()) return;
-    setCreating(true); setMsg('');
-    try {
-      const inv = await createInviteToken({
-        guest_name: guestName.trim(),
-        whatsapp:   whatsapp.trim() || undefined,
-        email:      email.trim() || undefined,
-      });
-      setInvites((prev) => [inv, ...prev]);
-      setGuestName(''); setWhatsapp(''); setEmail('');
-    } catch (e) { setMsg((e as Error).message); }
-    finally { setCreating(false); }
-  }, [guestName, whatsapp, email]);
-
   const handleCopy = useCallback((url: string, token: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(token);
@@ -451,10 +432,10 @@ const InvitesSection = memo(() => {
   }, []);
 
   const handleWhatsApp = useCallback(async (inv: InviteToken) => {
-    const num  = inv.whatsapp?.replace(/\D/g, '');
+    const num = inv.whatsapp?.replace(/\D/g, '');
     if (!num) return;
     const text = encodeURIComponent(
-      `Olá, ${inv.guest_name}! 💌\n\nVocê está convidado(a) para o casamento de Álvaro & Larissa.\n\nAcesse seu convite exclusivo: ${inv.invite_url}`
+      `Olá, ${inv.guest_name}! 💌\n\nVocê está convidado(a) para o casamento de Álvaro & Larissa.\n\nEnvie sua resposta pelo link exclusivo abaixo:\n${inv.invite_url}\n\nEste link é pessoal e intransferível.`
     );
     window.open(`https://wa.me/55${num}?text=${text}`, '_blank');
     try {
@@ -479,115 +460,66 @@ const InvitesSection = memo(() => {
     } catch (e) { setMsg((e as Error).message); }
   }, []);
 
+  const addInvite = useCallback((inv: InviteToken) => {
+    setInvites((prev) => [inv, ...prev]);
+  }, []);
+
   const getStatus = (inv: InviteToken) => {
-    if (inv.used)  return { label: 'Confirmou', color: 'bg-emerald-100 text-emerald-700' };
-    if (inv.sent)  return { label: `Enviado ${inv.sent_at ? fmtDate(inv.sent_at) : ''}`, color: 'bg-sky-100 text-sky-700' };
+    if (inv.used) return { label: 'Confirmou', color: 'bg-emerald-100 text-emerald-700' };
+    if (inv.sent) return { label: `Enviado ${inv.sent_at ? fmtDate(inv.sent_at) : ''}`, color: 'bg-sky-100 text-sky-700' };
     return { label: 'Aguardando', color: 'bg-stone-100 text-stone-500' };
   };
 
+  return { invites, loading, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, addInvite, getStatus };
+}
+
+// Formulário de cadastro — só o form, sem lista
+const InviteForm = memo(({ addInvite, msg, setMsg }: {
+  addInvite: (inv: InviteToken) => void;
+  msg: string;
+  setMsg: (m: string) => void;
+}) => {
+  const [guestName, setGuestName] = useState('');
+  const [whatsapp,  setWhatsapp]  = useState('');
+  const [email,     setEmail]     = useState('');
+  const [creating,  setCreating]  = useState(false);
+
+  const handleCreate = useCallback(async () => {
+    if (!guestName.trim()) return;
+    setCreating(true); setMsg('');
+    try {
+      const inv = await createInviteToken({
+        guest_name: guestName.trim(),
+        whatsapp:   whatsapp.trim() || undefined,
+        email:      email.trim() || undefined,
+      });
+      addInvite(inv);
+      setGuestName(''); setWhatsapp(''); setEmail('');
+    } catch (e) { setMsg((e as Error).message); }
+    finally { setCreating(false); }
+  }, [guestName, whatsapp, email, addInvite, setMsg]);
+
   return (
-    <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden mb-4">
-      <div className="p-4 border-b border-stone-100">
-        <p className={labelCls}>Gerenciar Convites</p>
-
-        {/* Formulário de novo convidado */}
-        <div className="mt-3 space-y-2">
-          <input
-            value={guestName}
-            onChange={(e) => setGuestName(e.target.value)}
-            placeholder="Nome do convidado / família *"
-            className={inputCls}
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="WhatsApp (ex: 11 99999-9999)"
-              className={inputCls}
-            />
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="E-mail"
-              type="email"
-              className={inputCls}
-            />
-          </div>
-          {msg && <p className="text-xs text-red-500 font-medium">{msg}</p>}
-          <button
-            onClick={handleCreate}
-            disabled={creating || !guestName.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#94A684] disabled:opacity-40 transition-all"
-          >
-            {creating ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
-            Adicionar Convidado
-          </button>
-        </div>
+    <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 space-y-2">
+      <p className={labelCls}>Gerenciar Convites</p>
+      <input value={guestName} onChange={(e) => setGuestName(e.target.value)}
+        placeholder="Nome do convidado / família *" className={inputCls} />
+      <div className="grid grid-cols-2 gap-2">
+        <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)}
+          placeholder="WhatsApp (ex: 11 99999-9999)" className={inputCls} />
+        <input value={email} onChange={(e) => setEmail(e.target.value)}
+          placeholder="E-mail" type="email" className={inputCls} />
       </div>
-
-      {/* Lista */}
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <RefreshCw size={16} className="animate-spin text-stone-300" />
-        </div>
-      ) : invites.length === 0 ? (
-        <p className="text-center text-stone-400 text-sm italic py-8">Nenhum convite cadastrado.</p>
-      ) : (
-        <div className="divide-y divide-stone-50">
-          {invites.map((inv) => {
-            const status = getStatus(inv);
-            return (
-              <div key={inv.token} className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-stone-900 truncate">{inv.guest_name}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {inv.whatsapp && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Phone size={9} />{inv.whatsapp}</span>}
-                    {inv.email    && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Mail size={9} />{inv.email}</span>}
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {/* Copiar link */}
-                  <button
-                    onClick={() => handleCopy(inv.invite_url, inv.token)}
-                    title="Copiar link"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors"
-                  >
-                    {copied === inv.token ? <Check size={13} className="text-[#94A684]" /> : <Link size={13} />}
-                  </button>
-                  {/* WhatsApp */}
-                  {inv.whatsapp && !inv.used && (
-                    <button
-                      onClick={() => handleWhatsApp(inv)}
-                      title="Enviar via WhatsApp"
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                    >
-                      <Phone size={13} />
-                    </button>
-                  )}
-                  {/* E-mail */}
-                  {inv.email && !inv.used && (
-                    <button
-                      onClick={() => handleEmail(inv)}
-                      disabled={emailSending === inv.token}
-                      title="Enviar e-mail"
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-sky-600 hover:bg-sky-50 transition-colors disabled:opacity-40"
-                    >
-                      {emailSending === inv.token ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />}
-                    </button>
-                  )}
-                  {/* Excluir */}
-                  {!inv.used && <DeleteButton onConfirm={() => handleDelete(inv.token)} size="xs" />}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {msg && <p className="text-xs text-red-500 font-medium">{msg}</p>}
+      <button onClick={handleCreate} disabled={creating || !guestName.trim()}
+        className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#94A684] disabled:opacity-40 transition-all">
+        {creating ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+        Adicionar Convidado
+      </button>
     </div>
   );
 });
-InvitesSection.displayName = 'InvitesSection';
+InviteForm.displayName = 'InviteForm';
 
 // ── RSVP tab ──────────────────────────────────────────────────────────────────
 
@@ -595,6 +527,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'declined'>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { invites, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, addInvite } = useInvites();
 
   const filtered = useMemo(() => {
     return responses.filter((r) => {
@@ -609,9 +542,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
 
   return (
     <div className="space-y-4">
-      <InvitesSection />
-
-      <p className={labelCls}>Respostas recebidas</p>
+      <InviteForm addInvite={addInvite} msg={msg} setMsg={setMsg} />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -640,15 +571,60 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
         </div>
       </div>
 
+      {/* Convites aguardando resposta */}
+      {invites.some((i) => !i.used) && (
+        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
+          <p className="px-4 pt-3 pb-1 text-[10px] font-black uppercase tracking-widest text-stone-400">Aguardando resposta</p>
+          <div className="divide-y divide-stone-50">
+            {invites.filter((i) => !i.used).map((inv) => (
+              <div key={inv.token} className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-stone-900 truncate">{inv.guest_name}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {inv.whatsapp && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Phone size={9} />{inv.whatsapp}</span>}
+                    {inv.email    && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Mail size={9} />{inv.email}</span>}
+                    {inv.sent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Enviado</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => handleCopy(inv.invite_url, inv.token)} title="Copiar link"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors">
+                    {copied === inv.token ? <Check size={13} className="text-[#94A684]" /> : <Link size={13} />}
+                  </button>
+                  {inv.whatsapp && (
+                    <button onClick={() => handleWhatsApp(inv)} title="Enviar via WhatsApp"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                      <Phone size={13} />
+                    </button>
+                  )}
+                  {inv.email && (
+                    <button onClick={() => handleEmail(inv)} disabled={emailSending === inv.token} title="Enviar e-mail"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-sky-600 hover:bg-sky-50 transition-colors disabled:opacity-40">
+                      {emailSending === inv.token ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />}
+                    </button>
+                  )}
+                  <DeleteButton onConfirm={() => handleDelete(inv.token)} size="xs" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className={labelCls}>Respostas recebidas</p>
+
       <div className="space-y-2">
         {filtered.length === 0 && (
           <p className="text-center text-stone-400 text-sm italic py-8">Nenhum resultado.</p>
         )}
-        {filtered.map((r) => (
+        {filtered.map((r) => {
+          const inv = invites.find((i) => i.guest_name.toLowerCase() === r.name.toLowerCase());
+          const hasDetails = !!r.message || !!inv;
+          return (
           <div key={r.id} className="bg-white rounded-2xl overflow-hidden border border-stone-100 shadow-sm">
             <button
               className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-colors"
-              onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+              onClick={() => hasDetails && setExpanded(expanded === r.id ? null : r.id)}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${r.attendance ? 'bg-[#94A684]' : 'bg-red-400'}`} />
@@ -667,25 +643,54 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                   {r.attendance ? 'Confirmado' : 'Declinado'}
                 </span>
                 {r.message && <MessageSquare size={13} className="text-stone-400 flex-shrink-0" />}
-                <ChevronDown size={13} className={`text-stone-400 transition-transform ${expanded === r.id ? 'rotate-180' : ''}`} />
+                {hasDetails && <ChevronDown size={13} className={`text-stone-400 transition-transform ${expanded === r.id ? 'rotate-180' : ''}`} />}
               </div>
             </button>
             <AnimatePresence>
-              {expanded === r.id && r.message && (
+              {expanded === r.id && hasDetails && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
+                  className="overflow-hidden border-t border-stone-100"
                 >
-                  <p className="px-5 pb-4 text-sm text-stone-600 italic border-t border-stone-100 pt-3">
-                    "{r.message}"
-                  </p>
+                  {r.message && (
+                    <p className="px-5 py-3 text-sm text-stone-600 italic">
+                      "{r.message}"
+                    </p>
+                  )}
+                  {inv && (
+                    <div className="flex items-center gap-3 px-5 py-3 bg-stone-50">
+                      <div className="flex-1 flex items-center gap-3 flex-wrap">
+                        {inv.whatsapp && <span className="flex items-center gap-1 text-xs text-stone-500"><Phone size={11} />{inv.whatsapp}</span>}
+                        {inv.email    && <span className="flex items-center gap-1 text-xs text-stone-500"><Mail size={11} />{inv.email}</span>}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => handleCopy(inv.invite_url, inv.token)} title="Copiar link"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-900 hover:bg-stone-200 transition-colors">
+                          {copied === inv.token ? <Check size={12} className="text-[#94A684]" /> : <Link size={12} />}
+                        </button>
+                        {inv.whatsapp && (
+                          <button onClick={() => handleWhatsApp(inv)} title="Reenviar via WhatsApp"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-emerald-100 transition-colors">
+                            <Phone size={12} />
+                          </button>
+                        )}
+                        {inv.email && (
+                          <button onClick={() => handleEmail(inv)} disabled={emailSending === inv.token} title="Reenviar e-mail"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-sky-600 hover:bg-sky-100 transition-colors disabled:opacity-40">
+                            {emailSending === inv.token ? <RefreshCw size={12} className="animate-spin" /> : <Mail size={12} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

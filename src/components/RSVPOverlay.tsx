@@ -10,7 +10,7 @@ interface RSVPOverlayProps {
   onClose: () => void;
 }
 
-type Step = 'validating' | 'blocked' | 'form' | 'success';
+type Step = 'validating' | 'blocked' | 'form' | 'edit' | 'success';
 
 export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
   const [step,       setStep]       = useState<Step>('validating');
@@ -33,16 +33,14 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
       return;
     }
 
-    validateInviteToken(inv, COUPLE).then(({ valid, guest_name, used }) => {
+    validateInviteToken(inv, COUPLE).then(({ valid, guest_name, used, previous_attendance }) => {
       if (!valid) {
         setBlockMsg('Convite inválido. Verifique o link recebido.');
         setStep('blocked');
-      } else if (used) {
-        setBlockMsg('Este convite já foi utilizado. Presença registrada anteriormente.');
-        setStep('blocked');
       } else {
         if (guest_name) setGuestName(guest_name);
-        setStep('form');
+        if (used && previous_attendance !== null) setAttendance(previous_attendance ? 1 : 0);
+        setStep(used ? 'edit' : 'form');
       }
     }).catch(() => {
       setBlockMsg('Não foi possível validar seu convite. Tente novamente.');
@@ -130,16 +128,20 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
             </motion.div>
           )}
 
-          {/* Formulário */}
-          {step === 'form' && (
+          {/* Formulário (primeira vez ou alteração) */}
+          {(step === 'form' || step === 'edit') && (
             <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <div className="text-center mb-8">
                 <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }}>
                   <Heart className="mx-auto mb-5 text-orange-400" fill="currentColor" size={44} />
                 </motion.div>
-                <h2 className="text-3xl md:text-4xl font-serif text-slate-900">Validar Presença?</h2>
+                <h2 className="text-3xl md:text-4xl font-serif text-slate-900">
+                  {step === 'edit' ? 'Alterar Resposta' : 'Validar Presença?'}
+                </h2>
                 <p className="text-slate-500 italic mt-3 px-4 text-sm md:text-base">
-                  Confirmar sua participação é o último dado que precisamos para completar este algoritmo de amor.
+                  {step === 'edit'
+                    ? 'Você já enviou uma resposta. Altere abaixo e confirme novamente.'
+                    : 'Confirmar sua participação é o último dado que precisamos para completar este algoritmo de amor.'}
                 </p>
               </div>
 
