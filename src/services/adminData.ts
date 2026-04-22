@@ -208,6 +208,7 @@ export async function fetchInviteTokens(): Promise<InviteToken[]> {
 
 export async function createInviteToken(data: {
   guest_name: string;
+  guests?: string[];
   whatsapp?: string;
   email?: string;
 }): Promise<InviteToken> {
@@ -225,7 +226,7 @@ export async function markInviteSent(token: string): Promise<void> {
 
 export async function updateInviteToken(
   token: string,
-  data: { guest_name: string; whatsapp?: string; email?: string }
+  data: { guest_name: string; guests?: string[]; whatsapp?: string; email?: string }
 ): Promise<void> {
   await apiWrite('PUT', `/admin/invites/${token}`, data);
 }
@@ -237,9 +238,9 @@ export async function deleteInviteToken(token: string): Promise<void> {
 export async function validateInviteToken(
   token: string,
   couple: string
-): Promise<{ valid: boolean; guest_name: string | null; used: boolean; previous_attendance: boolean | null }> {
+): Promise<{ valid: boolean; guest_name: string | null; guests: string[]; used: boolean; previous_responses: Record<string, boolean | null> }> {
   const res = await fetch(
     `${API}/invites/validate?token=${encodeURIComponent(token)}&couple=${encodeURIComponent(couple)}`
   );
-  return res.json() as Promise<{ valid: boolean; guest_name: string | null; used: boolean; previous_attendance: boolean | null }>;
+  return res.json() as Promise<{ valid: boolean; guest_name: string | null; guests: string[]; used: boolean; previous_responses: Record<string, boolean | null> }>;
 }

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS alvar028_casamentos.invite_tokens (
   couple_id   CHAR(36)      NOT NULL,
   token       VARCHAR(32)   NOT NULL,
   guest_name  VARCHAR(255)  NOT NULL,
+  guests      JSON          NULL,
   whatsapp    VARCHAR(30)   NULL,
   email       VARCHAR(255)  NULL,
   sent        TINYINT(1)    NOT NULL DEFAULT 0,

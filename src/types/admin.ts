@@ -18,6 +18,7 @@ export interface InviteToken {
   id:         string;
   token:      string;
   guest_name: string;
+  guests:     string[];
   whatsapp:   string | null;
   email:      string | null;
   sent:       boolean;

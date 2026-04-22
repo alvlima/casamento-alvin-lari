@@ -436,7 +436,7 @@ function useInvites() {
     const num = inv.whatsapp?.replace(/\D/g, '');
     if (!num) return;
     const text = encodeURIComponent(
-      `Olá, ${inv.guest_name}! 💌\n\nVocê está convidado(a) para o casamento de Álvaro & Larissa.\n\nEnvie sua resposta pelo link exclusivo abaixo:\n${inv.invite_url}\n\nEste link é pessoal e intransferível.`
+      `Olá, ${inv.guest_name}!\n\nVocê está convidado(a) para o casamento de Álvaro & Larissa.\n\nEnvie sua resposta pelo link exclusivo abaixo:\n${inv.invite_url}\n\nEste link é pessoal e intransferível.`
     );
     window.open(`https://wa.me/55${num}?text=${text}`, '_blank');
     try {
@@ -461,11 +461,11 @@ function useInvites() {
     } catch (e) { setMsg((e as Error).message); }
   }, []);
 
-  const handleUpdate = useCallback(async (token: string, data: { guest_name: string; whatsapp?: string; email?: string }) => {
+  const handleUpdate = useCallback(async (token: string, data: { guest_name: string; guests?: string[]; whatsapp?: string; email?: string }) => {
     try {
       await updateInviteToken(token, data);
       setInvites((prev) => prev.map((i) => i.token === token
-        ? { ...i, guest_name: data.guest_name, whatsapp: data.whatsapp ?? null, email: data.email ?? null }
+        ? { ...i, guest_name: data.guest_name, guests: data.guests ?? [], whatsapp: data.whatsapp ?? null, email: data.email ?? null }
         : i));
     } catch (e) { setMsg((e as Error).message); }
   }, []);
@@ -489,10 +489,22 @@ const InviteForm = memo(({ addInvite, msg, setMsg }: {
   msg: string;
   setMsg: (m: string) => void;
 }) => {
-  const [guestName, setGuestName] = useState('');
-  const [whatsapp,  setWhatsapp]  = useState('');
-  const [email,     setEmail]     = useState('');
-  const [creating,  setCreating]  = useState(false);
+  const [guestName,  setGuestName]  = useState('');
+  const [guestsList, setGuestsList] = useState<string[]>([]);
+  const [newGuest,   setNewGuest]   = useState('');
+  const [whatsapp,   setWhatsapp]   = useState('');
+  const [email,      setEmail]      = useState('');
+  const [creating,   setCreating]   = useState(false);
+
+  const addGuestToList = useCallback(() => {
+    if (!newGuest.trim()) return;
+    setGuestsList((prev) => [...prev, newGuest.trim()]);
+    setNewGuest('');
+  }, [newGuest]);
+
+  const removeGuest = useCallback((i: number) => {
+    setGuestsList((prev) => prev.filter((_, idx) => idx !== i));
+  }, []);
 
   const handleCreate = useCallback(async () => {
     if (!guestName.trim()) return;
@@ -500,20 +512,48 @@ const InviteForm = memo(({ addInvite, msg, setMsg }: {
     try {
       const inv = await createInviteToken({
         guest_name: guestName.trim(),
+        guests:     guestsList.length > 0 ? guestsList : undefined,
         whatsapp:   whatsapp.trim() || undefined,
         email:      email.trim() || undefined,
       });
       addInvite(inv);
-      setGuestName(''); setWhatsapp(''); setEmail('');
+      setGuestName(''); setGuestsList([]); setNewGuest(''); setWhatsapp(''); setEmail('');
     } catch (e) { setMsg((e as Error).message); }
     finally { setCreating(false); }
-  }, [guestName, whatsapp, email, addInvite, setMsg]);
+  }, [guestName, guestsList, whatsapp, email, addInvite, setMsg]);
 
   return (
     <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 space-y-2">
       <p className={labelCls}>Gerenciar Convites</p>
       <input value={guestName} onChange={(e) => setGuestName(e.target.value)}
-        placeholder="Nome do convidado / família *" className={inputCls} />
+        placeholder="Nome da família / grupo (ex: Família Silva) *" className={inputCls} />
+
+      {/* Convidados individuais */}
+      <div className="space-y-1.5">
+        <span className={labelCls}>Convidados individuais</span>
+        {guestsList.map((g, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="flex-1 text-sm text-stone-700 bg-stone-50 rounded-lg px-3 py-2">{g}</span>
+            <button onClick={() => removeGuest(i)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <input value={newGuest} onChange={(e) => setNewGuest(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addGuestToList())}
+            placeholder="Nome do convidado..." className={`${inputCls} flex-1`} />
+          <button onClick={addGuestToList} disabled={!newGuest.trim()}
+            className="px-3 py-2 bg-stone-100 text-stone-600 rounded-xl text-xs font-bold hover:bg-[#94A684] hover:text-white disabled:opacity-40 transition-all">
+            <Plus size={13} />
+          </button>
+        </div>
+        {guestsList.length === 0 && (
+          <p className="text-[10px] text-stone-400 italic">Sem convidados individuais: o nome da família será usado.</p>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)}
           placeholder="WhatsApp (ex: 11 99999-9999)" className={inputCls} />
@@ -524,7 +564,7 @@ const InviteForm = memo(({ addInvite, msg, setMsg }: {
       <button onClick={handleCreate} disabled={creating || !guestName.trim()}
         className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#94A684] disabled:opacity-40 transition-all">
         {creating ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
-        Adicionar Convidado
+        Adicionar Convite
       </button>
     </div>
   );
@@ -540,6 +580,8 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const { invites, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, handleUpdate, addInvite } = useInvites();
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editName,     setEditName]     = useState('');
+  const [editGuests,   setEditGuests]   = useState<string[]>([]);
+  const [editNewGuest, setEditNewGuest] = useState('');
   const [editWa,       setEditWa]       = useState('');
   const [editEmail,    setEditEmail]    = useState('');
   const [editSaving,   setEditSaving]   = useState(false);
@@ -547,6 +589,8 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const startEdit = useCallback((inv: InviteToken) => {
     setEditingToken(inv.token);
     setEditName(inv.guest_name);
+    setEditGuests(inv.guests ?? []);
+    setEditNewGuest('');
     setEditWa(inv.whatsapp ?? '');
     setEditEmail(inv.email ?? '');
   }, []);
@@ -554,10 +598,15 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const saveEdit = useCallback(async () => {
     if (!editingToken || !editName.trim()) return;
     setEditSaving(true);
-    await handleUpdate(editingToken, { guest_name: editName.trim(), whatsapp: editWa.trim() || undefined, email: editEmail.trim() || undefined });
+    await handleUpdate(editingToken, {
+      guest_name: editName.trim(),
+      guests:     editGuests.length > 0 ? editGuests : undefined,
+      whatsapp:   editWa.trim() || undefined,
+      email:      editEmail.trim() || undefined,
+    });
     setEditSaving(false);
     setEditingToken(null);
-  }, [editingToken, editName, editWa, editEmail, handleUpdate]);
+  }, [editingToken, editName, editGuests, editWa, editEmail, handleUpdate]);
 
   const filtered = useMemo(() => {
     return responses.filter((r) => {
@@ -570,8 +619,38 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
     });
   }, [responses, search, filter]);
 
+  // Totais — cada convite com guests conta os nomes individuais
+  const totalCadastrados = useMemo(() =>
+    invites.reduce((sum, i) => sum + (i.guests && i.guests.length > 0 ? i.guests.length : 1), 0),
+  [invites]);
+  const totalConfirmados = useMemo(() => responses.filter((r) => r.attendance).length, [responses]);
+  const totalDeclinados  = useMemo(() => responses.filter((r) => !r.attendance).length, [responses]);
+
   return (
     <div className="space-y-4">
+      {/* Estatísticas */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 border-[#8FA9B8] shadow-sm">
+          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400">Cadastrados</p>
+          <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 leading-none">{totalCadastrados}</p>
+          <p className="text-[10px] text-stone-400 mt-0.5">{invites.length} convite{invites.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 border-[#94A684] shadow-sm">
+          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400">Confirmados</p>
+          <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 leading-none">{totalConfirmados}</p>
+          <p className="text-[10px] text-[#94A684] mt-0.5 font-semibold">
+            {totalCadastrados > 0 ? Math.round((totalConfirmados / totalCadastrados) * 100) : 0}%
+          </p>
+        </div>
+        <div className="bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 border-red-300 shadow-sm">
+          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400">Declinaram</p>
+          <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 leading-none">{totalDeclinados}</p>
+          <p className="text-[10px] text-stone-400 mt-0.5">
+            {totalCadastrados - totalConfirmados - totalDeclinados} sem resposta
+          </p>
+        </div>
+      </div>
+
       <InviteForm addInvite={addInvite} msg={msg} setMsg={setMsg} />
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -612,7 +691,29 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                   /* Form de edição inline */
                   <div className="px-4 py-3 space-y-2 bg-stone-50">
                     <input value={editName} onChange={(e) => setEditName(e.target.value)}
-                      placeholder="Nome *" className={inputCls} />
+                      placeholder="Nome da família / grupo *" className={inputCls} />
+                    {/* Convidados individuais no edit */}
+                    <div className="space-y-1.5">
+                      {editGuests.map((g, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="flex-1 text-sm text-stone-700 bg-white rounded-lg px-3 py-1.5">{g}</span>
+                          <button type="button" onClick={() => setEditGuests((prev) => prev.filter((_, idx) => idx !== i))}
+                            className="w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-red-500 transition-colors">
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <input value={editNewGuest} onChange={(e) => setEditNewGuest(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && editNewGuest.trim()) { e.preventDefault(); setEditGuests((p) => [...p, editNewGuest.trim()]); setEditNewGuest(''); } }}
+                          placeholder="Adicionar convidado..." className={`${inputCls} flex-1 text-xs`} />
+                        <button type="button" onClick={() => { if (editNewGuest.trim()) { setEditGuests((p) => [...p, editNewGuest.trim()]); setEditNewGuest(''); } }}
+                          disabled={!editNewGuest.trim()}
+                          className="px-2 py-1.5 bg-stone-200 text-stone-600 rounded-lg text-xs hover:bg-[#94A684] hover:text-white disabled:opacity-40 transition-all">
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <input value={editWa} onChange={(e) => setEditWa(e.target.value)}
                         placeholder="WhatsApp" className={inputCls} />
@@ -635,6 +736,9 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                   <div className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-stone-900 truncate">{inv.guest_name}</p>
+                      {inv.guests && inv.guests.length > 0 && (
+                        <p className="text-[10px] text-stone-400 mt-0.5">{inv.guests.join(' · ')}</p>
+                      )}
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {inv.whatsapp && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Phone size={9} />{inv.whatsapp}</span>}
                         {inv.email    && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Mail size={9} />{inv.email}</span>}
