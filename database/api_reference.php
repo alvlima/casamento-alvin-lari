@@ -1196,7 +1196,9 @@ function handle_post_rsvp(PDO $db): void
 
     // Suporta múltiplos convidados: body.responses = [{name, attendance}]
     // ou formato legado: body.name + body.attendance
-    $guests_list = $invite['guests'] ? json_decode($invite['guests'], true) : [];
+    $guests_raw  = $invite['guests'] ? json_decode($invite['guests'], true) : [];
+    // guests são objetos {name, is_child} — normaliza legado string
+    $guests_list = array_map(fn($g) => is_array($g) ? $g : ['name' => $g, 'is_child' => false], $guests_raw);
     $message     = substr(strip_tags($body['message'] ?? ''), 0, 2000);
 
     if (!empty($guests_list) && is_array($body['responses'] ?? null)) {
@@ -1771,12 +1773,15 @@ function handle_invite_validate(PDO $db): void
         return;
     }
 
-    $guests = $row['guests'] ? json_decode($row['guests'], true) : [];
+    $guests_raw = $row['guests'] ? json_decode($row['guests'], true) : [];
+    // guests são objetos {name, is_child}
+    $guests = array_map(fn($g) => is_array($g) ? $g : ['name' => $g, 'is_child' => false], $guests_raw);
 
     $prev_responses = [];
     if ($row['used']) {
-        // Para cada convidado individual, busca a resposta anterior
-        $names = count($guests) > 0 ? $guests : [$row['guest_name']];
+        $names = count($guests) > 0
+            ? array_column($guests, 'name')
+            : [$row['guest_name']];
         foreach ($names as $name) {
             $prev = $db->prepare(
                 'SELECT attendance FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
@@ -1835,8 +1840,12 @@ function handle_admin_create_invite(PDO $db): void
     $guest_name = substr(trim(strip_tags($body['guest_name'] ?? '')), 0, 255);
     $whatsapp   = substr(trim(strip_tags($body['whatsapp']   ?? '')), 0, 30)  ?: null;
     $email      = filter_var(trim($body['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null;
-    $guests_raw = is_array($body['guests'] ?? null) ? $body['guests'] : [];
-    $guests     = array_values(array_filter(array_map(fn($g) => substr(trim(strip_tags($g)), 0, 255), $guests_raw)));
+    $guests_raw  = is_array($body['guests'] ?? null) ? $body['guests'] : [];
+    $guests      = array_values(array_filter(array_map(function($g) {
+        if (!is_array($g)) return null;
+        $name = substr(trim(strip_tags($g['name'] ?? '')), 0, 255);
+        return $name ? ['name' => $name, 'is_child' => (bool) ($g['is_child'] ?? false)] : null;
+    }, $guests_raw)));
     $guests_json = count($guests) > 0 ? json_encode($guests, JSON_UNESCAPED_UNICODE) : null;
 
     if (!$guest_name) {
@@ -1997,8 +2006,12 @@ function handle_admin_update_invite(PDO $db, string $token): void
     $guest_name = substr(trim(strip_tags($body['guest_name'] ?? '')), 0, 255);
     $whatsapp   = substr(trim(strip_tags($body['whatsapp']   ?? '')), 0, 30)  ?: null;
     $email      = filter_var(trim($body['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null;
-    $guests_raw = is_array($body['guests'] ?? null) ? $body['guests'] : [];
-    $guests     = array_values(array_filter(array_map(fn($g) => substr(trim(strip_tags($g)), 0, 255), $guests_raw)));
+    $guests_raw  = is_array($body['guests'] ?? null) ? $body['guests'] : [];
+    $guests      = array_values(array_filter(array_map(function($g) {
+        if (!is_array($g)) return null;
+        $name = substr(trim(strip_tags($g['name'] ?? '')), 0, 255);
+        return $name ? ['name' => $name, 'is_child' => (bool) ($g['is_child'] ?? false)] : null;
+    }, $guests_raw)));
     $guests_json = count($guests) > 0 ? json_encode($guests, JSON_UNESCAPED_UNICODE) : null;
 
     if (!$guest_name) {
@@ -2036,8 +2049,9 @@ function handle_admin_delete_invite(PDO $db, string $token): void
         return;
     }
 
-    $guests      = $invite['guests'] ? json_decode($invite['guests'], true) : [];
-    $all_names   = count($guests) > 0 ? $guests : [$invite['guest_name']];
+    $guests_raw  = $invite['guests'] ? json_decode($invite['guests'], true) : [];
+    $guests      = array_map(fn($g) => is_array($g) ? $g : ['name' => $g, 'is_child' => false], $guests_raw);
+    $all_names   = count($guests) > 0 ? array_column($guests, 'name') : [$invite['guest_name']];
 
     $db->beginTransaction();
     try {

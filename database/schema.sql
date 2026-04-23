@@ -308,8 +308,8 @@ VALUES (
   0.950,
   'Álvaro & Larissa',
   'Apê Patinhas',
-  'Um Convite | fora dos Dados.',
-  'Projetamos cada detalhe do nosso lar. Agora, convidamos você para caminhar por ele antes do altar.',
+  'Um Convite | para o lar que construímos.',
+  'Cada cômodo tem uma história. Caminhe pelo nosso apartamento antes de nos encontrar no altar.',
   '{"entrada":{"title":"O Portal","desc":"Você está diante da porta do Apê Patinhas. Este é o início da nossa vida juntos. Para entrar, você deve estar disposto a compartilhar da nossa paz.","nextText":"Girar a Chave e Entrar"},"sala":{"title":"A Sala de Estar e Jantar","desc":"Um espaço de aconchego onde o místico e o lógico se encontram. O Elo de Afeto está escondido aqui — procure pelos nossos gatinhos.","nextText":"Seguir para os Escritórios"},"escritorio":{"title":"O Hub de Dualidade","desc":"De um lado, a introspecção e a alma da Larissa. Do outro, a mente veloz e os dados do Álvaro. Alinhe os dois mundos para seguir adiante.","nextText":"Ir para a Varanda"},"varanda":{"title":"O Altar da Varanda","desc":"Nosso quintal, nossa rede, nosso sim. Se você trouxe as chaves do Afeto, da Intuição e da Lógica, o caminho para o nosso altar está aberto."}}'
 );
 

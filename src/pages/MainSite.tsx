@@ -24,10 +24,11 @@ export default function MainSite() {
   // Configurações do casal vindas do banco de dados
   const [coupleName,     setCoupleName]     = useState('Álvaro & Larissa');
   const [homeName,       setHomeName]       = useState('Álvaro & Larissa');
-  const [introTitle,     setIntroTitle]     = useState('Um Convite | fora dos Dados.');
-  const [introSubtitle,  setIntroSubtitle]  = useState('Projetamos cada detalhe do nosso lar. Agora, convidamos você para caminhar por ele antes do altar.');
-  const [weddingLocation,setWeddingLocation]= useState('Mogi das Cruzes, SP');
-  const [weddingDateStr, setWeddingDateStr] = useState('18 de Julho, 2026 • 16:00h');
+  const [introTitle,     setIntroTitle]     = useState('Um Convite | para o lar que construímos.');
+  const [introSubtitle,  setIntroSubtitle]  = useState('Cada cômodo tem uma história. Caminhe pelo nosso apartamento antes de nos encontrar no altar.');
+  const [weddingLocation,  setWeddingLocation]   = useState('Mogi das Cruzes, SP');
+  const [weddingDateStr,   setWeddingDateStr]    = useState('18 de Julho, 2026 • 16:00h');
+  const [weddingIsoDate,   setWeddingIsoDate]    = useState('2026-07-18T16:00:00');
   const [roomsConfig,    setRoomsConfig]    = useState<Record<string, RoomContent>>({});
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function MainSite() {
       setIntroSubtitle(cfg.site.intro_subtitle);
       setWeddingLocation(cfg.couple.wedding_location);
       setWeddingDateStr(`${formatWeddingDate(cfg.couple.wedding_date)} • ${cfg.couple.wedding_time}h`);
+      setWeddingIsoDate(`${cfg.couple.wedding_date}T${cfg.couple.wedding_time}:00`);
       if (Object.keys(cfg.rooms).length > 0) setRoomsConfig(cfg.rooms);
     }).catch(() => {/* mantém os defaults */});
 
@@ -80,6 +82,7 @@ export default function MainSite() {
               introTitle={introTitle}
               introSubtitle={introSubtitle}
               homeName={homeName}
+              weddingIsoDate={weddingIsoDate}
               onStart={handleStart}
               onShowRSVP={handleShowRSVP}
               onShowGiftList={handleShowGiftList}

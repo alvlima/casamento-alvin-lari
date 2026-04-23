@@ -48,6 +48,7 @@ import type {
   SiteEditorContent,
   AdminGiftItem,
   InviteToken,
+  GuestItem,
 } from '../types/admin';
 
 type Tab = 'overview' | 'rsvp' | 'gifts' | 'rifa' | 'site';
@@ -422,7 +423,17 @@ function useInvites() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setInvites(await fetchInviteTokens()); } catch { /* silent */ }
+    try {
+      const tokens = await fetchInviteTokens();
+      // Normaliza guests: banco antigo retorna string[], novo retorna GuestItem[]
+      const normalized = tokens.map((inv) => ({
+        ...inv,
+        guests: (inv.guests ?? []).map((g: unknown) =>
+          typeof g === 'string' ? { name: g, is_child: false } : (g as GuestItem)
+        ),
+      }));
+      setInvites(normalized);
+    } catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
 
@@ -463,7 +474,7 @@ function useInvites() {
     } catch (e) { setMsg((e as Error).message); }
   }, []);
 
-  const handleUpdate = useCallback(async (token: string, data: { guest_name: string; guests?: string[]; whatsapp?: string; email?: string }) => {
+  const handleUpdate = useCallback(async (token: string, data: { guest_name: string; guests?: GuestItem[]; whatsapp?: string; email?: string }) => {
     try {
       await updateInviteToken(token, data);
       setInvites((prev) => prev.map((i) => i.token === token
@@ -491,38 +502,47 @@ const InviteForm = memo(({ addInvite, msg, setMsg }: {
   msg: string;
   setMsg: (m: string) => void;
 }) => {
-  const [guestName,  setGuestName]  = useState('');
-  const [guestsList, setGuestsList] = useState<string[]>([]);
-  const [newGuest,   setNewGuest]   = useState('');
-  const [whatsapp,   setWhatsapp]   = useState('');
-  const [email,      setEmail]      = useState('');
-  const [creating,   setCreating]   = useState(false);
+  const [guestName,    setGuestName]    = useState('');
+  const [guestsList,   setGuestsList]   = useState<GuestItem[]>([]);
+  const [newGuest,     setNewGuest]     = useState('');
+  const [newIsChild,   setNewIsChild]   = useState(false);
+  const [whatsapp,     setWhatsapp]     = useState('');
+  const [email,        setEmail]        = useState('');
+  const [creating,     setCreating]     = useState(false);
 
-  const addGuestToList = useCallback(() => {
-    if (!newGuest.trim()) return;
-    setGuestsList((prev) => [...prev, newGuest.trim()]);
-    setNewGuest('');
-  }, [newGuest]);
+  const addGuestToList = useCallback((name = newGuest, isChild = newIsChild) => {
+    if (!name.trim()) return;
+    setGuestsList((prev) => [...prev, { name: name.trim(), is_child: isChild }]);
+    setNewGuest(''); setNewIsChild(false);
+  }, [newGuest, newIsChild]);
 
   const removeGuest = useCallback((i: number) => {
     setGuestsList((prev) => prev.filter((_, idx) => idx !== i));
   }, []);
 
+  const toggleChild = useCallback((i: number) => {
+    setGuestsList((prev) => prev.map((g, idx) => idx === i ? { ...g, is_child: !g.is_child } : g));
+  }, []);
+
   const handleCreate = useCallback(async () => {
     if (!guestName.trim()) return;
+    // Inclui o campo de texto pendente (placeholder) se houver
+    const finalGuests = newGuest.trim()
+      ? [...guestsList, { name: newGuest.trim(), is_child: newIsChild }]
+      : guestsList;
     setCreating(true); setMsg('');
     try {
       const inv = await createInviteToken({
         guest_name: guestName.trim(),
-        guests:     guestsList.length > 0 ? guestsList : undefined,
+        guests:     finalGuests.length > 0 ? finalGuests : undefined,
         whatsapp:   whatsapp.trim() || undefined,
         email:      email.trim() || undefined,
       });
       addInvite(inv);
-      setGuestName(''); setGuestsList([]); setNewGuest(''); setWhatsapp(''); setEmail('');
+      setGuestName(''); setGuestsList([]); setNewGuest(''); setNewIsChild(false); setWhatsapp(''); setEmail('');
     } catch (e) { setMsg((e as Error).message); }
     finally { setCreating(false); }
-  }, [guestName, guestsList, whatsapp, email, addInvite, setMsg]);
+  }, [guestName, guestsList, newGuest, newIsChild, whatsapp, email, addInvite, setMsg]);
 
   return (
     <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 space-y-2">
@@ -535,7 +555,13 @@ const InviteForm = memo(({ addInvite, msg, setMsg }: {
         <span className={labelCls}>Convidados individuais</span>
         {guestsList.map((g, i) => (
           <div key={i} className="flex items-center gap-2">
-            <span className="flex-1 text-sm text-stone-700 bg-stone-50 rounded-lg px-3 py-2">{g}</span>
+            <span className={`flex-1 text-sm text-stone-700 bg-stone-50 rounded-lg px-3 py-2 ${g.is_child ? 'text-stone-400 italic' : ''}`}>
+              {g.name}{g.is_child && ' (criança)'}
+            </span>
+            <button onClick={() => toggleChild(i)} title={g.is_child ? 'Marcar como adulto' : 'Marcar como criança'}
+              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${g.is_child ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500 hover:bg-amber-50'}`}>
+              {g.is_child ? 'Criança' : 'Adulto'}
+            </button>
             <button onClick={() => removeGuest(i)}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors">
               <Trash2 size={12} />
@@ -546,13 +572,17 @@ const InviteForm = memo(({ addInvite, msg, setMsg }: {
           <input value={newGuest} onChange={(e) => setNewGuest(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addGuestToList())}
             placeholder="Nome do convidado..." className={`${inputCls} flex-1`} />
-          <button onClick={addGuestToList} disabled={!newGuest.trim()}
+          <button onClick={() => setNewIsChild((v) => !v)} title="Criança?"
+            className={`px-2 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-colors ${newIsChild ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500 hover:bg-amber-50'}`}>
+            {newIsChild ? 'Criança' : 'Adulto'}
+          </button>
+          <button onClick={() => addGuestToList()} disabled={!newGuest.trim()}
             className="px-3 py-2 bg-stone-100 text-stone-600 rounded-xl text-xs font-bold hover:bg-[#94A684] hover:text-white disabled:opacity-40 transition-all">
             <Plus size={13} />
           </button>
         </div>
         {guestsList.length === 0 && (
-          <p className="text-[10px] text-stone-400 italic">Sem convidados individuais: o nome da família será usado.</p>
+          <p className="text-[10px] text-stone-400 italic">Sem convidados: o nome da família será usado como convidado único.</p>
         )}
       </div>
 
@@ -582,7 +612,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const { invites, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, handleUpdate, addInvite } = useInvites();
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editName,     setEditName]     = useState('');
-  const [editGuests,   setEditGuests]   = useState<string[]>([]);
+  const [editGuests,   setEditGuests]   = useState<GuestItem[]>([]);
   const [editNewGuest, setEditNewGuest] = useState('');
   const [editWa,       setEditWa]       = useState('');
   const [editEmail,    setEditEmail]    = useState('');
@@ -599,16 +629,20 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
 
   const saveEdit = useCallback(async () => {
     if (!editingToken || !editName.trim()) return;
+    // Inclui o campo de texto pendente (placeholder) se houver
+    const finalGuests = editNewGuest.trim()
+      ? [...editGuests, { name: editNewGuest.trim(), is_child: false }]
+      : editGuests;
     setEditSaving(true);
     await handleUpdate(editingToken, {
       guest_name: editName.trim(),
-      guests:     editGuests.length > 0 ? editGuests : undefined,
+      guests:     finalGuests.length > 0 ? finalGuests : undefined,
       whatsapp:   editWa.trim() || undefined,
       email:      editEmail.trim() || undefined,
     });
     setEditSaving(false);
     setEditingToken(null);
-  }, [editingToken, editName, editGuests, editWa, editEmail, handleUpdate]);
+  }, [editingToken, editName, editGuests, editNewGuest, editWa, editEmail, handleUpdate]);
 
   // Edição/exclusão por membro (RSVP individual)
   const [editingRsvpId,   setEditingRsvpId]   = useState<string | null>(null);
@@ -653,7 +687,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
     const matchedIds = new Set<string>();
 
     for (const inv of invites) {
-      const names = inv.guests && inv.guests.length > 0 ? inv.guests : [inv.guest_name];
+      const names = inv.guests && inv.guests.length > 0 ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[] : [inv.guest_name];
       const members = localResponses.filter((r) =>
         names.some((n) => n.toLowerCase() === r.name.toLowerCase())
       );
@@ -670,7 +704,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const filteredGroups = useMemo(() => {
     const q = search.toLowerCase();
     return groupedByInvite.groups.filter(({ inv, members }) => {
-      const names = inv.guests && inv.guests.length > 0 ? inv.guests : [inv.guest_name];
+      const names = inv.guests && inv.guests.length > 0 ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[] : [inv.guest_name];
       const matchSearch = !q || inv.guest_name.toLowerCase().includes(q) || names.some((n) => n.toLowerCase().includes(q));
       const matchFilter = filter === 'all'
         || (filter === 'confirmed' && members.some((m) => m.attendance))
@@ -679,9 +713,14 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
     });
   }, [groupedByInvite, search, filter]);
 
-  // Totais
+  // Totais — crianças não contam como convidados
   const totalCadastrados = useMemo(() =>
-    invites.reduce((sum, i) => sum + (i.guests && i.guests.length > 0 ? i.guests.length : 1), 0),
+    invites.reduce((sum, i) => {
+      if (i.guests && i.guests.length > 0) {
+        return sum + i.guests.filter((g) => !g.is_child).length;
+      }
+      return sum + 1;
+    }, 0),
   [invites]);
   const totalConfirmados = useMemo(() => localResponses.filter((r) => r.attendance).length, [localResponses]);
   const totalDeclinados  = useMemo(() => localResponses.filter((r) => !r.attendance).length, [localResponses]);
@@ -756,7 +795,13 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                     <div className="space-y-1.5">
                       {editGuests.map((g, i) => (
                         <div key={i} className="flex items-center gap-2">
-                          <span className="flex-1 text-sm text-stone-700 bg-white rounded-lg px-3 py-1.5">{g}</span>
+                          <span className={`flex-1 text-sm bg-white rounded-lg px-3 py-1.5 ${g.is_child ? 'text-stone-400 italic' : 'text-stone-700'}`}>
+                            {g.name}{g.is_child && ' (criança)'}
+                          </span>
+                          <button type="button" onClick={() => setEditGuests((prev) => prev.map((x, idx) => idx === i ? { ...x, is_child: !x.is_child } : x))}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${g.is_child ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500 hover:bg-amber-50'}`}>
+                            {g.is_child ? 'Criança' : 'Adulto'}
+                          </button>
                           <button type="button" onClick={() => setEditGuests((prev) => prev.filter((_, idx) => idx !== i))}
                             className="w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-red-500 transition-colors">
                             <Trash2 size={11} />
@@ -765,9 +810,9 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                       ))}
                       <div className="flex gap-2">
                         <input value={editNewGuest} onChange={(e) => setEditNewGuest(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && editNewGuest.trim()) { e.preventDefault(); setEditGuests((p) => [...p, editNewGuest.trim()]); setEditNewGuest(''); } }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && editNewGuest.trim()) { e.preventDefault(); setEditGuests((p) => [...p, { name: editNewGuest.trim(), is_child: false }]); setEditNewGuest(''); } }}
                           placeholder="Adicionar convidado..." className={`${inputCls} flex-1 text-xs`} />
-                        <button type="button" onClick={() => { if (editNewGuest.trim()) { setEditGuests((p) => [...p, editNewGuest.trim()]); setEditNewGuest(''); } }}
+                        <button type="button" onClick={() => { if (editNewGuest.trim()) { setEditGuests((p) => [...p, { name: editNewGuest.trim(), is_child: false }]); setEditNewGuest(''); } }}
                           disabled={!editNewGuest.trim()}
                           className="px-2 py-1.5 bg-stone-200 text-stone-600 rounded-lg text-xs hover:bg-[#94A684] hover:text-white disabled:opacity-40 transition-all">
                           <Plus size={12} />
@@ -797,7 +842,7 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-stone-900 truncate">{inv.guest_name}</p>
                       {inv.guests && inv.guests.length > 0 && (
-                        <p className="text-[10px] text-stone-400 mt-0.5">{inv.guests.join(' · ')}</p>
+                        <p className="text-[10px] text-stone-400 mt-0.5">{inv.guests.map((g) => g.name + (g.is_child ? ' ©' : '')).join(' · ')}</p>
                       )}
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {inv.whatsapp && <span className="flex items-center gap-1 text-[10px] text-stone-400"><Phone size={9} />{inv.whatsapp}</span>}
