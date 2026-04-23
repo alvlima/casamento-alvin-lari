@@ -14,11 +14,16 @@ export interface Couple {
 
 // ── Convites ─────────────────────────────────────────────────────────────────
 
+export interface GuestItem {
+  name:     string;
+  is_child: boolean;
+}
+
 export interface InviteToken {
   id:         string;
   token:      string;
   guest_name: string;
-  guests:     string[];
+  guests:     GuestItem[];
   whatsapp:   string | null;
   email:      string | null;
   sent:       boolean;

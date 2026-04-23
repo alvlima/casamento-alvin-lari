@@ -20,6 +20,7 @@ import type {
   SiteEditorRoom,
   AdminGiftItem,
   InviteToken,
+  GuestItem,
 } from '../types/admin';
 import { invalidateWeddingConfigCache } from './weddingConfig';
 
@@ -223,7 +224,7 @@ export async function fetchInviteTokens(): Promise<InviteToken[]> {
 
 export async function createInviteToken(data: {
   guest_name: string;
-  guests?: string[];
+  guests?: GuestItem[];
   whatsapp?: string;
   email?: string;
 }): Promise<InviteToken> {
@@ -241,7 +242,7 @@ export async function markInviteSent(token: string): Promise<void> {
 
 export async function updateInviteToken(
   token: string,
-  data: { guest_name: string; guests?: string[]; whatsapp?: string; email?: string }
+  data: { guest_name: string; guests?: GuestItem[]; whatsapp?: string; email?: string }
 ): Promise<void> {
   await apiWrite('PUT', `/admin/invites/${token}`, data);
 }
