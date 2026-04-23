@@ -71,7 +71,7 @@ export const IntroScreen = memo(({
         <Heart size={48} fill="currentColor" />
       </motion.div>
 
-      <h1 className="text-6xl md:text-8xl font-serif mb-6 leading-tight text-slate-900 tracking-tighter">
+      <h1 className="text-4xl md:text-6xl font-serif mb-6 leading-tight text-slate-900 tracking-tighter">
         {introTitle.includes('|') ? (
           <>
             {introTitle.split('|')[0].trim()} <br />
@@ -110,39 +110,34 @@ export const IntroScreen = memo(({
         )}
       </div>
 
-      {/* CTA principal */}
-      <button
-        onClick={onStart}
-        className="group relative bg-slate-900 text-white px-12 py-6 rounded-full font-black uppercase tracking-[0.2em] hover:bg-[#94A684] transition-all shadow-2xl hover:shadow-[#94A684]/40"
-      >
-        <span className="relative z-10 flex items-center gap-3">
-          Iniciar Imersão <Zap size={20} className="fill-current" />
-        </span>
-        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 rounded-full transition-opacity" />
-      </button>
-
-      {/* Atalhos */}
-      <div className="flex items-center justify-center gap-3 mt-8 flex-wrap">
+      {/* CTAs principais */}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
         <button
           onClick={onShowRSVP}
-          className="flex items-center gap-2 bg-white text-slate-700 px-6 py-3 rounded-full text-sm font-black uppercase tracking-widest shadow-md hover:shadow-lg hover:text-[#94A684] transition-all border border-slate-100"
+          className="group relative bg-slate-900 text-white px-8 py-5 rounded-full font-black uppercase tracking-[0.15em] hover:bg-[#94A684] transition-all shadow-2xl hover:shadow-[#94A684]/40 flex items-center gap-3 w-full sm:w-auto justify-center"
         >
-          <CheckCircle2 size={16} />
+          <CheckCircle2 size={18} className="flex-shrink-0" />
           Confirmar Presença
         </button>
 
         <button
           onClick={onShowGiftList}
-          className="flex items-center gap-2 bg-white text-slate-700 px-6 py-3 rounded-full text-sm font-black uppercase tracking-widest shadow-md hover:shadow-lg hover:text-[#94A684] transition-all border border-slate-100"
+          className="group relative bg-slate-900 text-white px-8 py-5 rounded-full font-black uppercase tracking-[0.15em] hover:bg-[#8FA9B8] transition-all shadow-2xl hover:shadow-[#8FA9B8]/40 flex items-center gap-3 w-full sm:w-auto justify-center"
         >
-          <Gift size={16} />
+          <Gift size={18} className="flex-shrink-0" />
           Lista de Presentes
         </button>
       </div>
 
-      <p className="text-slate-400 text-xs mt-4 italic">
-        ou explore o {homeName} antes de decidir
-      </p>
+      {/* Imersão — ação secundária */}
+      <button
+        onClick={onStart}
+        className="mt-3 flex items-center gap-2 text-slate-400 hover:text-slate-700 text-xs font-black uppercase tracking-widest transition-colors group"
+      >
+        <Zap size={13} className="group-hover:text-[#94A684] transition-colors" />
+        ou explore o {homeName}
+        <Zap size={13} className="group-hover:text-[#94A684] transition-colors" />
+      </button>
     </motion.div>
   );
 });

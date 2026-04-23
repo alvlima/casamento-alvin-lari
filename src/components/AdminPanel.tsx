@@ -607,7 +607,7 @@ InviteForm.displayName = 'InviteForm';
 
 const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'confirmed' | 'declined'>('all');
+  const [filter, setFilter] = useState<'all' | 'confirmed' | 'declined' | 'pending'>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const { invites, msg, setMsg, copied, emailSending, handleCopy, handleWhatsApp, handleEmail, handleDelete, handleUpdate, addInvite } = useInvites();
   const [editingToken, setEditingToken] = useState<string | null>(null);
@@ -703,14 +703,29 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
 
   const filteredGroups = useMemo(() => {
     const q = search.toLowerCase();
-    return groupedByInvite.groups.filter(({ inv, members }) => {
-      const names = inv.guests && inv.guests.length > 0 ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[] : [inv.guest_name];
-      const matchSearch = !q || inv.guest_name.toLowerCase().includes(q) || names.some((n) => n.toLowerCase().includes(q));
-      const matchFilter = filter === 'all'
-        || (filter === 'confirmed' && members.some((m) => m.attendance))
-        || (filter === 'declined'  && members.some((m) => !m.attendance));
-      return matchSearch && matchFilter;
-    });
+    return groupedByInvite.groups
+      .map(({ inv, members }) => {
+        // Filtra membros pelo filtro de status
+        const filteredMembers = filter === 'all' ? members
+          : filter === 'confirmed' ? members.filter((m) => m.attendance)
+          : filter === 'declined'  ? members.filter((m) => !m.attendance)
+          : members; // 'pending' shows all members of pending invites (handled below)
+
+        // Filtra pelo texto de busca: nome da família, nomes dos membros ou mensagem
+        const names = inv.guests && inv.guests.length > 0
+          ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[]
+          : [inv.guest_name];
+        const matchSearch = !q
+          || inv.guest_name.toLowerCase().includes(q)
+          || names.some((n) => n.toLowerCase().includes(q))
+          || members.some((m) => m.name.toLowerCase().includes(q) || (m.message ?? '').toLowerCase().includes(q));
+
+        // Filtro 'pending' não mostra respondidos
+        if (filter === 'pending') return null;
+        if (!matchSearch || filteredMembers.length === 0) return null;
+        return { inv, members: filteredMembers };
+      })
+      .filter(Boolean) as { inv: InviteToken; members: RsvpResponse[] }[];
   }, [groupedByInvite, search, filter]);
 
   // Totais — crianças não contam como convidados
@@ -724,11 +739,17 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   [invites]);
   const totalConfirmados = useMemo(() => localResponses.filter((r) => r.attendance).length, [localResponses]);
   const totalDeclinados  = useMemo(() => localResponses.filter((r) => !r.attendance).length, [localResponses]);
+  const totalPendentes   = useMemo(() =>
+    invites.filter((i) => !i.used).reduce((sum, i) => {
+      if (i.guests && i.guests.length > 0) return sum + i.guests.filter((g) => !g.is_child).length;
+      return sum + 1;
+    }, 0),
+  [invites]);
 
   return (
     <div className="space-y-4">
       {/* Estatísticas */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 border-[#8FA9B8] shadow-sm">
           <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400">Cadastrados</p>
           <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 leading-none">{totalCadastrados}</p>
@@ -744,9 +765,11 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
         <div className="bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 border-red-300 shadow-sm">
           <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400">Declinaram</p>
           <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 leading-none">{totalDeclinados}</p>
-          <p className="text-[10px] text-stone-400 mt-0.5">
-            {totalCadastrados - totalConfirmados - totalDeclinados} sem resposta
-          </p>
+        </div>
+        <div className="bg-white rounded-xl md:rounded-2xl p-3 md:p-5 border-l-4 border-amber-300 shadow-sm">
+          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-stone-400">Pendentes</p>
+          <p className="text-xl md:text-3xl font-black text-stone-900 mt-0.5 leading-none">{totalPendentes}</p>
+          <p className="text-[10px] text-amber-500 mt-0.5 font-semibold">aguardando</p>
         </div>
       </div>
 
@@ -762,29 +785,34 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#8FA9B8]/40 focus:border-[#8FA9B8] transition-all"
           />
         </div>
-        <div className="flex gap-1.5">
-          {(['all', 'confirmed', 'declined'] as const).map((f) => (
+        <div className="flex gap-1.5 flex-wrap">
+          {([
+            { id: 'all',       label: 'Todos'        },
+            { id: 'confirmed', label: '✓ Confirmados' },
+            { id: 'declined',  label: '✗ Declinaram'  },
+            { id: 'pending',   label: '⏳ Pendentes'   },
+          ] as const).map(({ id, label }) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={id}
+              onClick={() => setFilter(id)}
               className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                filter === f
+                filter === id
                   ? 'bg-stone-900 text-white'
                   : 'bg-white text-stone-500 border border-stone-200 hover:border-stone-400'
               }`}
             >
-              {f === 'all' ? 'Todos' : f === 'confirmed' ? '✓ Confirmados' : '✗ Declinaram'}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Convites aguardando resposta */}
-      {invites.some((i) => !i.used) && (
+      {/* Convites aguardando resposta — oculto quando filtro ativo é Confirmados/Declinados */}
+      {invites.some((i) => !i.used) && filter !== 'confirmed' && filter !== 'declined' && (
         <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
           <p className="px-4 pt-3 pb-1 text-[10px] font-black uppercase tracking-widest text-stone-400">Aguardando resposta</p>
           <div className="divide-y divide-stone-50">
-            {invites.filter((i) => !i.used).map((inv) => (
+            {invites.filter((i) => !i.used && (!search || i.guest_name.toLowerCase().includes(search.toLowerCase()) || (i.guests ?? []).some((g) => (typeof g === 'string' ? g : g.name).toLowerCase().includes(search.toLowerCase())))).map((inv) => (
               <div key={inv.token}>
                 {editingToken === inv.token ? (
                   /* Form de edição inline */
@@ -881,11 +909,17 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
         </div>
       )}
 
-      <p className={labelCls}>Respostas recebidas</p>
+      {filter !== 'pending' && <p className={labelCls}>Respostas recebidas</p>}
 
-      <div className="space-y-2">
-        {filteredGroups.length === 0 && groupedByInvite.unmatched.length === 0 && (
-          <p className="text-center text-stone-400 text-sm italic py-8">Nenhuma resposta ainda.</p>
+      {filter !== 'pending' && <div className="space-y-2">
+        {filteredGroups.length === 0 && groupedByInvite.unmatched.filter((r) => {
+          const q = search.toLowerCase();
+          return (!q || r.name.toLowerCase().includes(q) || (r.message ?? '').toLowerCase().includes(q)) &&
+            (filter === 'all' || (filter === 'confirmed' && r.attendance) || (filter === 'declined' && !r.attendance));
+        }).length === 0 && (
+          <p className="text-center text-stone-400 text-sm italic py-8">
+            {search || filter !== 'all' ? 'Nenhum resultado para esta busca.' : 'Nenhuma resposta ainda.'}
+          </p>
         )}
 
         {/* Grupos por convite (família ou individual) */}
@@ -1075,7 +1109,8 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
             </AnimatePresence>
           </div>
         ))}
-      </div>
+      </div>}
+
     </div>
   );
 });
