@@ -1,0 +1,29 @@
+src/components/RoomView.tsx
+  d174fa6eba044a99 160,162,164,167
+src/components/IntroScreen.tsx
+  d174fa6eba044a99 3,12,54,130-137
+src/pages/MainSite.tsx
+  d174fa6eba044a99 3,8,19,55,87
+src/components/GiftList.tsx
+  d174fa6eba044a99 588-598
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e647470d5b8ddad823d411f2671f4ad60ab960d2",
+  "prompts": {
+    "d174fa6eba044a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "04180c6d-9726-4eb5-b4d6-58fa6a97ff41",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "alvarsoares_meli",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 26,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
