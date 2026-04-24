@@ -126,11 +126,6 @@ VarandaContent.displayName = 'VarandaContent';
 
 // ── Main RoomView ───────────────────────────────────────────────────────────
 
-const PREV_ROOM: Partial<Record<RoomId, RoomId>> = {
-  sala:       'entrada',
-  escritorio: 'sala',
-  varanda:    'escritorio',
-};
 
 interface RoomViewProps {
   currentRoom:      RoomId;
@@ -147,15 +142,10 @@ export const RoomView = memo(
     const visual          = ROOM_VISUAL[currentRoom];
     const content         = roomsConfig[currentRoom] ?? { title: currentRoom, desc: '' };
     const allKeysCollected = inventory.length >= 3;
-    const prevRoom        = PREV_ROOM[currentRoom];
 
     const handleNavigate = useCallback(() => {
       if (visual.next) onNavigate(visual.next);
     }, [visual.next, onNavigate]);
-
-    const handleBack = useCallback(() => {
-      if (prevRoom) onNavigate(prevRoom); else onBack();
-    }, [prevRoom, onNavigate, onBack]);
 
     return (
       <motion.div
@@ -167,14 +157,14 @@ export const RoomView = memo(
       >
         {/* Visual do Cômodo */}
         <div className="relative group perspective-1000">
-          {/* Botão voltar — overlay no canto superior esquerdo do card */}
+          {/* Botão voltar ao início — overlay no canto superior esquerdo do card */}
           <button
-            onClick={handleBack}
+            onClick={onBack}
             className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-white/80 backdrop-blur-sm text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-1.5 rounded-xl shadow-sm border border-white/60 transition-all group"
-            aria-label="Voltar"
+            aria-label="Voltar ao início"
           >
             <ArrowLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
-            <span className="text-[9px] font-black uppercase tracking-[0.4em]">Voltar</span>
+            <span className="text-[9px] font-black uppercase tracking-[0.4em]">Início</span>
           </button>
           <motion.div
             initial={{ rotateY: -20, opacity: 0 }}

@@ -1,6 +1,6 @@
 import { memo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Gift, CheckCircle2, Heart } from 'lucide-react';
+import { Zap, Gift, CheckCircle2, Heart, Ticket } from 'lucide-react';
 
 interface IntroScreenProps {
   introTitle:     string;
@@ -9,6 +9,7 @@ interface IntroScreenProps {
   onStart:        () => void;
   onShowGiftList: () => void;
   onShowRSVP:     () => void;
+  onShowRifa:     () => void;
 }
 
 function useCountdown(targetIso: string) {
@@ -50,7 +51,7 @@ const Digit = ({ value, label }: { value: number; label: string }) => (
 
 export const IntroScreen = memo(({
   introTitle, introSubtitle, weddingIsoDate,
-  onStart, onShowGiftList, onShowRSVP,
+  onStart, onShowGiftList, onShowRSVP, onShowRifa,
 }: IntroScreenProps) => {
   const { days, hours, minutes, seconds, over } = useCountdown(weddingIsoDate);
 
@@ -125,6 +126,14 @@ export const IntroScreen = memo(({
         >
           <Gift size={18} />
           Lista de Presentes
+        </button>
+
+        <button
+          onClick={onShowRifa}
+          className="flex items-center justify-center gap-3 bg-white text-slate-700 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-slate-50 hover:text-slate-900 transition-all shadow-md border border-slate-200 w-full"
+        >
+          <Ticket size={18} />
+          Rifa de Casa Nova
         </button>
       </div>
 
