@@ -585,6 +585,17 @@ export const GiftList = memo(({ onClose }: { onClose: () => void }) => {
               ))}
             </div>
           )}
+
+          {/* Link para a rifa */}
+          <div className="mt-10 mb-4 text-center">
+            <p className="text-sm text-slate-400 mb-3">Nenhum item agradou? Que tal participar da nossa rifa?</p>
+            <a
+              href="/rifa"
+              className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm"
+            >
+              🎟️ Rifa de Casa Nova
+            </a>
+          </div>
         </div>
       </motion.div>
 

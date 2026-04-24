@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { colors, type RoomId, type InventoryKey } from '../constants/theme';
 import { NavHUD } from '../components/NavHUD';
 import { IntroScreen } from '../components/IntroScreen';
 import { RoomView } from '../components/RoomView';
-import { FloatingMenu } from '../components/FloatingMenu';
+
 import { fetchWeddingConfig, type RoomContent } from '../services/weddingConfig';
 
 const RSVPOverlay = lazy(() =>
@@ -15,6 +16,7 @@ const GiftList = lazy(() =>
 );
 
 export default function MainSite() {
+  const navigate = useNavigate();
   const [currentRoom, setCurrentRoom] = useState<RoomId>('entrada');
   const [inventory,   setInventory]   = useState<InventoryKey[]>([]);
   const [gameStarted, setGameStarted] = useState(false);
@@ -50,6 +52,7 @@ export default function MainSite() {
   const handleCloseRSVP    = useCallback(() => setShowRSVP(false), []);
   const handleShowGiftList = useCallback(() => setShowGiftList(true), []);
   const handleCloseGiftList= useCallback(() => setShowGiftList(false), []);
+  const handleShowRifa     = useCallback(() => navigate('/rifa'), [navigate]);
 
   const handleCollect = useCallback((key: InventoryKey) => {
     setInventory((prev) => (prev.includes(key) ? prev : [...prev, key]));
@@ -81,6 +84,7 @@ export default function MainSite() {
               onStart={handleStart}
               onShowRSVP={handleShowRSVP}
               onShowGiftList={handleShowGiftList}
+              onShowRifa={handleShowRifa}
             />
           ) : (
             <RoomView
@@ -97,15 +101,6 @@ export default function MainSite() {
         </AnimatePresence>
       </main>
 
-      <AnimatePresence>
-        {(gameStarted || showRSVP || showGiftList) && (
-          <FloatingMenu
-            onShowRSVP={handleShowRSVP}
-            onShowGiftList={handleShowGiftList}
-            onGoHome={handleBack}
-          />
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {showRSVP && (
