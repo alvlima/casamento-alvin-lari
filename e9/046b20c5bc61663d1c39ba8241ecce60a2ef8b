@@ -1,0 +1,14 @@
+src/components/GiftList.tsx
+  h_02c6cc34529855 545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e9046b20c5bc61663d1c39ba8241ecce60a2ef8b",
+  "prompts": {},
+  "humans": {
+    "h_02c6cc34529855": {
+      "author": "alvarsoares_meli"
+    }
+  }
+}
