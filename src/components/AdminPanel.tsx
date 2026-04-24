@@ -449,7 +449,7 @@ function useInvites() {
     const num = inv.whatsapp?.replace(/\D/g, '');
     if (!num) return;
     const text = encodeURIComponent(
-      `Olá, ${inv.guest_name}!\n\nVocê está convidado(a) para o casamento de Álvaro & Larissa.\n\nEnvie sua resposta pelo link exclusivo abaixo:\n${inv.invite_url}\n\nEste link é pessoal e intransferível.`
+      `Olá, ${inv.guest_name}!\n\nVocê está convidado(a) para o casamento de Álvaro & Larissa.\n\nEnvie sua resposta pelo link exclusivo abaixo:\n${inv.invite_url}\n\nEste link é pessoal e intransferível.\n\nExplore o restante do nosso site em: https://alvinlari.com.br`
     );
     window.open(`https://wa.me/55${num}?text=${text}`, '_blank');
     try {
