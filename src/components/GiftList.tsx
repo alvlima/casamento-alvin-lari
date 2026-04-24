@@ -542,7 +542,7 @@ export const GiftList = memo(({ onClose }: { onClose: () => void }) => {
             <span className="text-xl flex-shrink-0">💛</span>
             <p className="text-sm text-slate-600 leading-relaxed">
               <strong className="text-slate-800">Optamos por não passar o sapatinho ou gravata durante a festa.</strong>{' '}
-              Nossa maior alegria é a sua presença! Se quiser nos presentear, fique à vontade para contribuir online pela lista abaixo ou deixar um envelopinho na caixinha de dinheiro que estará na festa.
+              Nossa maior alegria é a sua presença! Se quiser nos presentear, fique à vontade para contribuir online pela lista abaixo.
             </p>
           </div>
         </div>
