@@ -1,0 +1,23 @@
+src/components/AdminPanel.tsx
+  d174fa6eba044a99 452
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "7ab77105cb3127b4deac832391f60b7e9845fcdd",
+  "prompts": {
+    "d174fa6eba044a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "04180c6d-9726-4eb5-b4d6-58fa6a97ff41",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "alvarsoares_meli",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
