@@ -45,7 +45,19 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
         return;
       }
 
-      const names = guestList && guestList.length > 0 ? guestList : (guest_name ? [guest_name] : []);
+      // Normaliza guests: backend retorna GuestItem[] ({name, is_child}) ou string[]
+      const rawNames = guestList && guestList.length > 0
+        ? guestList.map((g: unknown) => (typeof g === 'string' ? g : (g as { name: string; is_child?: boolean }).name))
+        : (guest_name ? [guest_name] : []);
+      // Exclui crianças da confirmação de presença
+      const names = rawNames.filter((n) => {
+        if (!guestList || guestList.length === 0) return true;
+        const item = guestList.find((g: unknown) =>
+          typeof g === 'string' ? g === n : (g as { name: string }).name === n
+        ) as { name: string; is_child?: boolean } | string | undefined;
+        return typeof item === 'string' ? true : !(item?.is_child);
+      });
+
       setIsFamily(names.length > 1);
 
       if (used && Object.keys(previous_responses).length > 0) {

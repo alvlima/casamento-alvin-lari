@@ -254,9 +254,9 @@ export async function deleteInviteToken(token: string): Promise<void> {
 export async function validateInviteToken(
   token: string,
   couple: string
-): Promise<{ valid: boolean; guest_name: string | null; guests: string[]; used: boolean; previous_responses: Record<string, boolean | null> }> {
+): Promise<{ valid: boolean; guest_name: string | null; guests: unknown[]; used: boolean; previous_responses: Record<string, boolean | null> }> {
   const res = await fetch(
     `${API}/invites/validate?token=${encodeURIComponent(token)}&couple=${encodeURIComponent(couple)}`
   );
-  return res.json() as Promise<{ valid: boolean; guest_name: string | null; guests: string[]; used: boolean; previous_responses: Record<string, boolean | null> }>;
+  return res.json() as Promise<{ valid: boolean; guest_name: string | null; guests: unknown[]; used: boolean; previous_responses: Record<string, boolean | null> }>;
 }
