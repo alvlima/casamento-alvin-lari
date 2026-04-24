@@ -229,7 +229,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Deixe um conselho junguiano ou um log de alegria…"
+                    placeholder="Deixe uma mensagem, desejo ou abraço para os noivos…"
                     className="w-full p-5 rounded-[25px] border-2 border-slate-100 bg-white h-24 resize-none focus:outline-none focus:border-[#94A684] transition-colors"
                   />
                 </div>
