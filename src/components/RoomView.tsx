@@ -1,22 +1,24 @@
 import { memo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Cat, Code, Sparkles, Heart, DoorOpen, ArrowRight, ArrowLeft, Lock, MapPin, Calendar, Music, Gift } from 'lucide-react';
+import { Cat, Code, Sparkles, Heart, DoorOpen, ArrowRight, ArrowLeft, Lock, Music, Gift } from 'lucide-react';
 import { colors, type RoomId, type InventoryKey } from '../constants/theme';
 import type { RoomContent } from '../services/weddingConfig';
 
 // ── Visual estático dos cômodos (cores e ícones — não vêm do banco) ────────────
 
 interface RoomVisual {
-  next?: RoomId;
-  bg:   string;
-  icon: React.ReactNode;
+  next?:   RoomId;
+  bg:      string;
+  icon:    React.ReactNode;
+  image?:  string;
+  image2?: string;
 }
 
 const ROOM_VISUAL: Record<RoomId, RoomVisual> = {
-  entrada:   { next: 'sala',       bg: colors.sonhoAnjo,   icon: <DoorOpen size={48} className="text-slate-400" /> },
-  sala:      { next: 'escritorio', bg: colors.damasco,     icon: <Cat      size={48} className="text-white opacity-20" /> },
-  escritorio:{ next: 'varanda',    bg: colors.azulAstral,  icon: <Code     size={48} className="text-white opacity-20" /> },
-  varanda:   {                     bg: colors.tomilhoSeco,  icon: <Heart    size={48} className="text-white opacity-20" /> },
+  entrada:    { next: 'sala',       bg: colors.sonhoAnjo,   icon: <DoorOpen size={48} className="text-slate-400" />,          image: '/portal.png' },
+  sala:       { next: 'escritorio', bg: colors.damasco,     icon: <Cat      size={48} className="text-white opacity-20" />, image: '/sala-jantar.png' },
+  escritorio: { next: 'varanda',    bg: colors.azulAstral,  icon: <Code     size={48} className="text-white opacity-20" />,   image: '/intuicao.png', image2: '/logica.png' },
+  varanda:    {                     bg: colors.tomilhoSeco,  icon: <Heart    size={48} className="text-white opacity-20" />,   image: '/varanda.png' },
 };
 
 // ── Sub-components (memoized) ───────────────────────────────────────────────
@@ -31,12 +33,12 @@ const SalaInteractive = memo(({ collected, onCollect }: SalaInteractiveProps) =>
     whileHover={{ scale: 1.1, rotate: 5 }}
     whileTap={{ scale: 0.9 }}
     onClick={() => onCollect('Afeto')}
-    className={`cursor-pointer p-8 bg-white rounded-full shadow-2xl border-4 border-[#D6BC9D] flex flex-col items-center transition-colors ${
-      collected ? 'text-[#D6BC9D] opacity-60' : 'text-[#D6BC9D]'
+    className={`cursor-pointer p-6 bg-white rounded-3xl shadow-xl border-b-8 flex flex-col items-center transition-colors ${
+      collected ? 'text-[#D6BC9D] border-[#D6BC9D]/40 opacity-60' : 'text-[#D6BC9D] border-[#D6BC9D]/30'
     }`}
   >
-    <Cat size={48} />
-    <p className="text-[10px] mt-2 font-black tracking-widest uppercase">
+    <Cat size={32} />
+    <p className="text-[10px] mt-2 font-bold uppercase">
       {collected ? 'Coletado!' : 'Coletar Afeto'}
     </p>
   </motion.div>
@@ -75,13 +77,10 @@ EscritorioInteractive.displayName = 'EscritorioInteractive';
 
 interface VarandaContentProps {
   allKeysCollected: boolean;
-  weddingLocation:  string;
-  weddingDateStr:   string;
-  onShowRSVP:       () => void;
   onShowGiftList:   () => void;
 }
 
-const VarandaContent = memo(({ allKeysCollected, weddingLocation, weddingDateStr, onShowRSVP, onShowGiftList }: VarandaContentProps) => {
+const VarandaContent = memo(({ allKeysCollected, onShowGiftList }: VarandaContentProps) => {
   if (!allKeysCollected) {
     return (
       <div className="p-5 md:p-8 bg-slate-100/80 backdrop-blur rounded-[24px] md:rounded-[30px] flex items-center gap-4 md:gap-6 border-2 border-dashed border-slate-200">
@@ -110,31 +109,16 @@ const VarandaContent = memo(({ allKeysCollected, weddingLocation, weddingDateStr
         <Music size={80} />
       </div>
       <h3 className="text-2xl md:text-3xl font-serif mb-4 md:mb-6 text-[#94A684]">Alinhamento Completo!</h3>
-      <div className="space-y-3 mb-5 md:mb-8">
-        <div className="flex items-center gap-4 text-slate-600">
-          <MapPin size={20} className="text-[#94A684]" />
-          <span className="font-bold">{weddingLocation}</span>
-        </div>
-        <div className="flex items-center gap-4 text-slate-600">
-          <Calendar size={20} className="text-[#94A684]" />
-          <span className="font-bold">{weddingDateStr}</span>
-        </div>
-      </div>
-      <div className="space-y-3">
-        <button
-          onClick={onShowRSVP}
-          className="w-full py-5 bg-[#94A684] text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-[#94A684]/20"
-        >
-          Confirmar Presença
-        </button>
-        <button
-          onClick={onShowGiftList}
-          className="w-full py-5 bg-white text-slate-700 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all shadow-md border border-slate-100 flex items-center justify-center gap-3"
-        >
-          <Gift size={18} />
-          Lista de Presentes
-        </button>
-      </div>
+      <p className="text-slate-500 text-sm italic mb-6 leading-relaxed">
+        Você chegou até aqui. Use o link do seu convite para confirmar presença e ver todos os detalhes do evento.
+      </p>
+      <button
+        onClick={onShowGiftList}
+        className="w-full py-5 bg-[#94A684] text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-[#94A684]/20 flex items-center justify-center gap-3"
+      >
+        <Gift size={18} />
+        Lista de Presentes
+      </button>
     </motion.div>
   );
 });
@@ -152,17 +136,14 @@ interface RoomViewProps {
   currentRoom:      RoomId;
   inventory:        InventoryKey[];
   roomsConfig:      Record<string, RoomContent>;
-  weddingLocation:  string;
-  weddingDateStr:   string;
   onCollect:        (key: InventoryKey) => void;
   onNavigate:       (room: RoomId) => void;
   onBack:           () => void;
-  onShowRSVP:       () => void;
   onShowGiftList:   () => void;
 }
 
 export const RoomView = memo(
-  ({ currentRoom, inventory, roomsConfig, weddingLocation, weddingDateStr, onCollect, onNavigate, onBack, onShowRSVP, onShowGiftList }: RoomViewProps) => {
+  ({ currentRoom, inventory, roomsConfig, onCollect, onNavigate, onBack, onShowGiftList }: RoomViewProps) => {
     const visual          = ROOM_VISUAL[currentRoom];
     const content         = roomsConfig[currentRoom] ?? { title: currentRoom, desc: '' };
     const allKeysCollected = inventory.length >= 3;
@@ -186,41 +167,53 @@ export const RoomView = memo(
       >
         {/* Visual do Cômodo */}
         <div className="relative group perspective-1000">
+          {/* Botão voltar — overlay no canto superior esquerdo do card */}
+          <button
+            onClick={handleBack}
+            className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-white/80 backdrop-blur-sm text-slate-600 hover:text-slate-900 hover:bg-white px-3 py-1.5 rounded-xl shadow-sm border border-white/60 transition-all group"
+            aria-label="Voltar"
+          >
+            <ArrowLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
+            <span className="text-[9px] font-black uppercase tracking-[0.4em]">Voltar</span>
+          </button>
           <motion.div
             initial={{ rotateY: -20, opacity: 0 }}
             animate={{ rotateY: 0, opacity: 1 }}
-            className="relative aspect-[5/3] sm:aspect-[4/3] md:aspect-square rounded-[28px] md:rounded-[40px] border-[8px] md:border-[12px] border-white shadow-[0_30px_60px_-15px_rgba(0,0,0,0.12)] flex items-center justify-center overflow-hidden"
+            className="relative aspect-[5/3] sm:aspect-[4/3] md:aspect-square rounded-[28px] md:rounded-[40px] border-[8px] md:border-[12px] border-white shadow-[0_30px_60px_-15px_rgba(0,0,0,0.12)] overflow-hidden"
             style={{ backgroundColor: visual.bg }}
           >
-            <div className="absolute inset-0 opacity-20 mix-blend-overlay pointer-events-none">
-              <div className="w-full h-full bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[size:20px_20px]" />
-            </div>
-            <div className="z-10 flex flex-col items-center gap-3">
-              <div className="scale-75 md:scale-100">{visual.icon}</div>
-              <div className="text-slate-800 font-serif text-xl md:text-3xl text-center px-4 uppercase tracking-[0.2em] md:tracking-[0.3em]">
-                {content.title}
+            {visual.image && visual.image2 ? (
+              /* Escritório: duas fotos lado a lado */
+              <div className="flex h-full w-full">
+                <img src={visual.image}  alt="Intuição" className="w-1/2 h-full object-cover object-right" />
+                <img src={visual.image2} alt="Lógica"   className="w-1/2 h-full object-cover border-l-2 border-white" />
               </div>
-            </div>
+            ) : visual.image ? (
+              /* Cômodo com foto única */
+              <img src={visual.image} alt={content.title} className="w-full h-full object-cover" />
+            ) : (
+              /* Cômodo sem foto: ícone + título (sala) */
+              <>
+                <div className="absolute inset-0 opacity-20 mix-blend-overlay pointer-events-none">
+                  <div className="w-full h-full bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[size:20px_20px]" />
+                </div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+                  <div className="scale-75 md:scale-100">{visual.icon}</div>
+                  <div className="text-slate-800 font-serif text-xl md:text-3xl text-center px-4 uppercase tracking-[0.2em] md:tracking-[0.3em]">
+                    {content.title}
+                  </div>
+                </div>
+              </>
+            )}
           </motion.div>
         </div>
 
         {/* Storytelling e Ações */}
         <div className="space-y-5 md:space-y-10">
           <div className="space-y-3 md:space-y-6">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-1.5 bg-white text-slate-600 hover:text-slate-900 hover:shadow-md px-3 py-1.5 rounded-xl shadow-sm border border-slate-100 transition-all group"
-                aria-label="Voltar"
-              >
-                <ArrowLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
-                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em]">Voltar</span>
-              </button>
-              <span className="text-slate-200">·</span>
-              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] md:tracking-[0.5em] text-[#94A684]">
-                Localização Atual
-              </span>
-            </div>
+            <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] md:tracking-[0.5em] text-[#94A684]">
+              Localização Atual
+            </span>
             <h2 className="text-3xl md:text-5xl font-serif text-slate-900 leading-tight -mt-1">{content.title}</h2>
             <p className="text-slate-600 text-base md:text-lg leading-relaxed italic border-l-4 border-slate-200 pl-4 md:pl-6">
               {content.desc}
@@ -263,9 +256,6 @@ export const RoomView = memo(
             {currentRoom === 'varanda' && (
               <VarandaContent
                 allKeysCollected={allKeysCollected}
-                weddingLocation={weddingLocation}
-                weddingDateStr={weddingDateStr}
-                onShowRSVP={onShowRSVP}
                 onShowGiftList={onShowGiftList}
               />
             )}

@@ -5,7 +5,7 @@ import { NavHUD } from '../components/NavHUD';
 import { IntroScreen } from '../components/IntroScreen';
 import { RoomView } from '../components/RoomView';
 import { FloatingMenu } from '../components/FloatingMenu';
-import { fetchWeddingConfig, formatWeddingDate, type RoomContent } from '../services/weddingConfig';
+import { fetchWeddingConfig, type RoomContent } from '../services/weddingConfig';
 
 const RSVPOverlay = lazy(() =>
   import('../components/RSVPOverlay').then((m) => ({ default: m.RSVPOverlay }))
@@ -23,22 +23,17 @@ export default function MainSite() {
 
   // Configurações do casal vindas do banco de dados
   const [coupleName,     setCoupleName]     = useState('Álvaro & Larissa');
-  const [homeName,       setHomeName]       = useState('Álvaro & Larissa');
+
   const [introTitle,     setIntroTitle]     = useState('Um Convite | para o lar que construímos.');
   const [introSubtitle,  setIntroSubtitle]  = useState('Cada cômodo tem uma história. Caminhe pelo nosso apartamento antes de nos encontrar no altar.');
-  const [weddingLocation,  setWeddingLocation]   = useState('Mogi das Cruzes, SP');
-  const [weddingDateStr,   setWeddingDateStr]    = useState('18 de Julho, 2026 • 16:00h');
   const [weddingIsoDate,   setWeddingIsoDate]    = useState('2026-07-18T16:00:00');
   const [roomsConfig,    setRoomsConfig]    = useState<Record<string, RoomContent>>({});
 
   useEffect(() => {
     fetchWeddingConfig().then((cfg) => {
       setCoupleName(cfg.couple.name);
-      setHomeName(cfg.couple.home_name);
       setIntroTitle(cfg.site.intro_title);
       setIntroSubtitle(cfg.site.intro_subtitle);
-      setWeddingLocation(cfg.couple.wedding_location);
-      setWeddingDateStr(`${formatWeddingDate(cfg.couple.wedding_date)} • ${cfg.couple.wedding_time}h`);
       setWeddingIsoDate(`${cfg.couple.wedding_date}T${cfg.couple.wedding_time}:00`);
       if (Object.keys(cfg.rooms).length > 0) setRoomsConfig(cfg.rooms);
     }).catch(() => {/* mantém os defaults */});
@@ -81,7 +76,7 @@ export default function MainSite() {
               key="intro"
               introTitle={introTitle}
               introSubtitle={introSubtitle}
-              homeName={homeName}
+
               weddingIsoDate={weddingIsoDate}
               onStart={handleStart}
               onShowRSVP={handleShowRSVP}
@@ -93,12 +88,9 @@ export default function MainSite() {
               currentRoom={currentRoom}
               inventory={inventory}
               roomsConfig={roomsConfig}
-              weddingLocation={weddingLocation}
-              weddingDateStr={weddingDateStr}
               onCollect={handleCollect}
               onNavigate={handleNavigate}
               onBack={handleBack}
-              onShowRSVP={handleShowRSVP}
               onShowGiftList={handleShowGiftList}
             />
           )}

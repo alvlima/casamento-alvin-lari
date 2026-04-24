@@ -5,8 +5,7 @@ import { Zap, Gift, CheckCircle2, Heart } from 'lucide-react';
 interface IntroScreenProps {
   introTitle:     string;
   introSubtitle:  string;
-  homeName:       string;
-  weddingIsoDate: string; // ex: "2026-07-18T16:00:00"
+  weddingIsoDate: string;
   onStart:        () => void;
   onShowGiftList: () => void;
   onShowRSVP:     () => void;
@@ -50,7 +49,7 @@ const Digit = ({ value, label }: { value: number; label: string }) => (
 );
 
 export const IntroScreen = memo(({
-  introTitle, introSubtitle, homeName, weddingIsoDate,
+  introTitle, introSubtitle, weddingIsoDate,
   onStart, onShowGiftList, onShowRSVP,
 }: IntroScreenProps) => {
   const { days, hours, minutes, seconds, over } = useCountdown(weddingIsoDate);
@@ -111,32 +110,31 @@ export const IntroScreen = memo(({
       </div>
 
       {/* CTAs principais */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+      <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
         <button
           onClick={onShowRSVP}
-          className="group relative bg-slate-900 text-white px-8 py-5 rounded-full font-black uppercase tracking-[0.15em] hover:bg-[#94A684] transition-all shadow-2xl hover:shadow-[#94A684]/40 flex items-center gap-3 w-full sm:w-auto justify-center"
+          className="flex items-center justify-center gap-3 bg-[#94A684] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-[#7d9270] transition-all shadow-lg shadow-[#94A684]/30 w-full"
         >
-          <CheckCircle2 size={18} className="flex-shrink-0" />
+          <CheckCircle2 size={18} />
           Confirmar Presença
         </button>
 
         <button
           onClick={onShowGiftList}
-          className="group relative bg-slate-900 text-white px-8 py-5 rounded-full font-black uppercase tracking-[0.15em] hover:bg-[#8FA9B8] transition-all shadow-2xl hover:shadow-[#8FA9B8]/40 flex items-center gap-3 w-full sm:w-auto justify-center"
+          className="flex items-center justify-center gap-3 bg-white text-slate-700 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-slate-50 hover:text-slate-900 transition-all shadow-md border border-slate-200 w-full"
         >
-          <Gift size={18} className="flex-shrink-0" />
+          <Gift size={18} />
           Lista de Presentes
         </button>
       </div>
 
-      {/* Imersão — ação secundária */}
+      {/* Imersão — ação terciária */}
       <button
         onClick={onStart}
-        className="mt-3 flex items-center gap-2 text-slate-400 hover:text-slate-700 text-xs font-black uppercase tracking-widest transition-colors group"
+        className="mt-2 flex items-center gap-1.5 text-slate-400 hover:text-slate-600 text-[11px] font-bold uppercase tracking-[0.3em] transition-colors mx-auto"
       >
-        <Zap size={13} className="group-hover:text-[#94A684] transition-colors" />
-        ou explore o {homeName}
-        <Zap size={13} className="group-hover:text-[#94A684] transition-colors" />
+        <Zap size={11} />
+        ou explore o apartamento
       </button>
     </motion.div>
   );
