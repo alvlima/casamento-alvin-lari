@@ -179,28 +179,36 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
               </div>
 
               <form className="space-y-4" onSubmit={handleSubmit}>
-                {/* Lista de convidados com toggle */}
-                <div className="space-y-2">
+                {/* Lista de convidados com seleção explícita */}
+                <div className="space-y-3">
                   {guests.map((g, i) => (
-                    <button
-                      key={g.name}
-                      type="button"
-                      onClick={() => toggleAttendance(i)}
-                      className={`w-full flex items-center justify-between p-4 rounded-[20px] border-2 transition-all text-left ${
-                        g.attendance
-                          ? 'bg-[#94A684]/10 border-[#94A684] text-slate-900'
-                          : 'bg-white border-slate-200 text-slate-500'
-                      }`}
-                    >
-                      <span className="font-semibold text-sm">{g.name}</span>
-                      <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                        g.attendance
-                          ? 'bg-[#94A684] text-white'
-                          : 'bg-slate-100 text-slate-400'
-                      }`}>
-                        {g.attendance ? 'Vou!' : 'Não vou'}
-                      </span>
-                    </button>
+                    <div key={g.name} className="bg-white rounded-[20px] px-4 py-3 border border-slate-100 shadow-sm">
+                      <p className="font-semibold text-sm text-slate-800 mb-2.5">{g.name}</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => g.attendance !== 1 && toggleAttendance(i)}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                            g.attendance === 1
+                              ? 'bg-[#94A684] text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-400 hover:bg-[#94A684]/20 hover:text-[#94A684]'
+                          }`}
+                        >
+                          ✓ Vou!
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => g.attendance !== 0 && toggleAttendance(i)}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                            g.attendance === 0
+                              ? 'bg-red-100 text-red-600 shadow-sm'
+                              : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-400'
+                          }`}
+                        >
+                          ✕ Não vou
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
 
