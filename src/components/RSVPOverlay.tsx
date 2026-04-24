@@ -2,6 +2,8 @@ import { memo, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Loader2, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { validateInviteToken } from '../services/adminData';
+import { fetchWeddingConfig, formatWeddingDate } from '../services/weddingConfig';
+import { Calendar, MapPin } from 'lucide-react';
 
 const API    = import.meta.env.VITE_API_BASE_URL as string;
 const COUPLE = 'alvin-lari';
@@ -18,14 +20,15 @@ interface GuestResponse {
 }
 
 export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
-  const [step,      setStep]      = useState<Step>('validating');
-  const [guests,    setGuests]    = useState<GuestResponse[]>([]);
-  const [message,   setMessage]   = useState('');
-  const [error,     setError]     = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [blockMsg,  setBlockMsg]  = useState('');
-  const [token,     setToken]     = useState('');
-  const [isFamily,  setIsFamily]  = useState(false);
+  const [step,        setStep]      = useState<Step>('validating');
+  const [guests,      setGuests]    = useState<GuestResponse[]>([]);
+  const [message,     setMessage]   = useState('');
+  const [error,       setError]     = useState('');
+  const [loading,     setLoading]   = useState(false);
+  const [blockMsg,    setBlockMsg]  = useState('');
+  const [token,       setToken]     = useState('');
+  const [isFamily,    setIsFamily]  = useState(false);
+  const [dateStr,     setDateStr]   = useState('18 de Julho de 2026 • 16:00h');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -37,6 +40,10 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
       setStep('blocked');
       return;
     }
+
+    fetchWeddingConfig().then((cfg) => {
+      setDateStr(`${formatWeddingDate(cfg.couple.wedding_date)} • ${cfg.couple.wedding_time}h`);
+    }).catch(() => {});
 
     validateInviteToken(inv, COUPLE).then(({ valid, guest_name, guests: guestList, used, previous_responses }) => {
       if (!valid) {
@@ -157,6 +164,18 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                       ? 'Confirme a presença de cada convidado individualmente.'
                       : 'Confirmar sua participação é o último dado que precisamos.'}
                 </p>
+              </div>
+
+              {/* Card de data e local */}
+              <div className="bg-white rounded-2xl px-5 py-4 mb-4 space-y-2.5 border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-3 text-slate-700">
+                  <Calendar size={16} className="text-[#94A684] flex-shrink-0" />
+                  <span className="text-sm font-semibold">{dateStr}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <MapPin size={16} className="text-[#94A684] flex-shrink-0" />
+                  <span className="text-sm text-slate-700 font-semibold">Mogi das Cruzes, SP <span className="font-normal text-slate-400 italic">— endereço a ser confirmado em breve</span></span>
+                </div>
               </div>
 
               <form className="space-y-4" onSubmit={handleSubmit}>

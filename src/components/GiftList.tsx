@@ -536,8 +536,19 @@ export const GiftList = memo(({ onClose }: { onClose: () => void }) => {
           </button>
         </div>
 
+        {/* Aviso sobre tradição */}
+        <div className="max-w-4xl mx-auto px-6 pt-4 pb-2">
+          <div className="bg-[#E8C9B5]/20 border border-[#D6BC9D]/40 rounded-2xl px-5 py-4 flex gap-3 items-start">
+            <span className="text-xl flex-shrink-0">💛</span>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              <strong className="text-slate-800">Optamos por não passar o sapatinho ou gravata durante a festa.</strong>{' '}
+              Nossa maior alegria é a sua presença! Se quiser nos presentear, fique à vontade para contribuir online pela lista abaixo ou deixar um envelopinho na caixinha de dinheiro que estará na festa.
+            </p>
+          </div>
+        </div>
+
         {/* Métodos de pagamento */}
-        <div className="max-w-4xl mx-auto px-6 pt-4 pb-2 flex items-center gap-3">
+        <div className="max-w-4xl mx-auto px-6 pt-3 pb-2 flex items-center gap-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aceita</p>
           <span className="flex items-center gap-1.5 bg-[#94A684]/10 text-[#94A684] text-xs font-black px-3 py-1.5 rounded-xl"><QrCode size={12}/>Pix</span>
           <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-black px-3 py-1.5 rounded-xl"><CreditCard size={12}/>Cartão até 12×</span>
