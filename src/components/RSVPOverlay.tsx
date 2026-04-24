@@ -212,7 +212,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
 
                 <button type="submit" disabled={loading}
                   className="w-full py-5 bg-slate-900 text-white rounded-[25px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-400/20 hover:bg-[#94A684] transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-                  {loading ? <><Loader2 size={16} className="animate-spin" />Registrando…</> : 'Registrar confirmação'}
+                  {loading ? <><Loader2 size={16} className="animate-spin" />Registrando…</> : 'Enviar resposta'}
                 </button>
               </form>
             </motion.div>

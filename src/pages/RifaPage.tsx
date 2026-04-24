@@ -572,7 +572,7 @@ export default function RifaPage() {
           className="inline-flex items-center justify-center w-14 h-14 bg-white/10 rounded-2xl mb-5">
           <Ticket size={28} />
         </motion.div>
-        <p className="font-script text-3xl text-white/70 mb-2">{coupleName}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/50 mb-2">{coupleName}</p>
         <h1 className="text-3xl md:text-4xl font-serif font-bold mb-2">Rifa do Chá de Casa Nova</h1>
 
         <div className="mt-8 max-w-sm mx-auto">
