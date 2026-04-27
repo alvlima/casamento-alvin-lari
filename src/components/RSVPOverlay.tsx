@@ -83,7 +83,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
     ));
   }, []);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -202,8 +202,8 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                   <span className="text-base flex-shrink-0">👗</span>
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-0.5">Dresscode</p>
-                    <p className="text-sm text-slate-600">Tons claros — off white, bege, marrom claro e pastéis.</p>
-                    <p className="text-xs text-slate-400 italic mt-1">Não é uma festa de gala — sem terno ou gravata. Venha elegante e confortável do seu jeito.</p>
+                    <p className="text-sm text-slate-600">Tons claros: Off white, Damasco, Bege / Creme, Amadeirado claro e/ou Pastéis.</p>
+                    <p className="text-xs text-slate-400 italic mt-1">Esqueça as formalidades e o rigor dos trajes tradicionais. Queremos você leve e à vontade. Escolha um visual que te faça bem dentro da nossa paleta.</p>
                   </div>
                 </div>
               </div>
