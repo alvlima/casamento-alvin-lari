@@ -182,16 +182,18 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                   <a
                     href="https://waze.com/ul?q=588M8RGX%2B9Q&navigate=yes"
                     target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 bg-[#05C8F7]/15 text-[#0090CC] hover:bg-[#05C8F7]/30 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#33CCFF]/15 text-[#009EC1] hover:bg-[#33CCFF]/25 py-2.5 rounded-xl text-xs font-black tracking-wide transition-colors"
                   >
-                    🚗 Waze
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7.589 2 4 5.589 4 10c0 2.8 1.4 5.267 3.536 6.828L12 22l4.464-5.172C18.6 15.267 20 12.8 20 10c0-4.411-3.589-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                    Waze
                   </a>
                   <a
                     href="https://maps.google.com/?q=588M8RGX%2B9Q"
                     target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 py-2.5 rounded-xl text-xs font-black tracking-wide transition-colors"
                   >
-                    📍 Google Maps
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+                    Google Maps
                   </a>
                 </div>
 
@@ -201,6 +203,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-0.5">Dresscode</p>
                     <p className="text-sm text-slate-600">Tons claros — off white, bege, marrom claro e pastéis.</p>
+                    <p className="text-xs text-slate-400 italic mt-1">Não é uma festa de gala — sem terno ou gravata. Venha elegante e confortável do seu jeito.</p>
                   </div>
                 </div>
               </div>
