@@ -29,6 +29,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
   const [token,       setToken]     = useState('');
   const [isFamily,    setIsFamily]  = useState(false);
   const [dateStr,     setDateStr]   = useState('18 de Julho de 2026 • 16:00h');
+  const [location,    setLocation]  = useState('Mogi das Cruzes, SP');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -43,6 +44,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
 
     fetchWeddingConfig().then((cfg) => {
       setDateStr(`${formatWeddingDate(cfg.couple.wedding_date)} • ${cfg.couple.wedding_time}h`);
+      if (cfg.couple.wedding_location) setLocation(cfg.couple.wedding_location);
     }).catch(() => {});
 
     validateInviteToken(inv, COUPLE).then(({ valid, guest_name, guests: guestList, used, previous_responses }) => {
@@ -174,7 +176,23 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin size={16} className="text-[#94A684] flex-shrink-0" />
-                  <span className="text-sm text-slate-700 font-semibold">Mogi das Cruzes, SP <span className="font-normal text-slate-400 italic">— endereço a ser confirmado em breve</span></span>
+                  <span className="text-sm text-slate-700 font-semibold">{location} <span className="font-normal text-slate-400 italic">— endereço a ser confirmado em breve</span></span>
+                </div>
+                <div className="flex gap-2 pt-1 pl-7">
+                  <a
+                    href="https://waze.com/ul?q=588M8RGX%2B9Q&navigate=yes"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#05C8F7]/15 text-[#0090CC] hover:bg-[#05C8F7]/30 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+                  >
+                    🚗 Waze
+                  </a>
+                  <a
+                    href="https://maps.google.com/?q=588M8RGX%2B9Q"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+                  >
+                    📍 Google Maps
+                  </a>
                 </div>
               </div>
 

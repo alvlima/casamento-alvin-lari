@@ -605,7 +605,7 @@ InviteForm.displayName = 'InviteForm';
 
 // ── RSVP tab ──────────────────────────────────────────────────────────────────
 
-const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
+const RsvpTab = memo(({ responses, onRefresh }: { responses: RsvpResponse[]; onRefresh: () => Promise<void> }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'declined' | 'pending'>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -645,15 +645,11 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
   }, [editingToken, editName, editGuests, editNewGuest, editWa, editEmail, handleUpdate]);
 
   // Edição/exclusão por membro (RSVP individual)
-  const [editingRsvpId,   setEditingRsvpId]   = useState<string | null>(null);
-  const [editRsvpName,    setEditRsvpName]    = useState('');
-  const [editRsvpAtt,     setEditRsvpAtt]     = useState<1 | 0>(1);
-  const [editRsvpMsg,     setEditRsvpMsg]     = useState('');
-  const [rsvpSaving,      setRsvpSaving]      = useState(false);
-  const [localResponses,  setLocalResponses]  = useState<RsvpResponse[]>([]);
-
-  // Sincroniza respostas locais com as vindas do pai
-  useEffect(() => { setLocalResponses(responses); }, [responses]);
+  const [editingRsvpId, setEditingRsvpId] = useState<string | null>(null);
+  const [editRsvpName,  setEditRsvpName]  = useState('');
+  const [editRsvpAtt,   setEditRsvpAtt]   = useState<1 | 0>(1);
+  const [editRsvpMsg,   setEditRsvpMsg]   = useState('');
+  const [rsvpSaving,    setRsvpSaving]    = useState(false);
 
   const startEditRsvp = useCallback((r: RsvpResponse) => {
     setEditingRsvpId(r.id);
@@ -667,28 +663,26 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
     setRsvpSaving(true);
     try {
       await updateAdminRsvp(editingRsvpId, { name: editRsvpName.trim(), attendance: editRsvpAtt, message: editRsvpMsg.trim() });
-      setLocalResponses((prev) => prev.map((r) =>
-        r.id === editingRsvpId ? { ...r, name: editRsvpName.trim(), attendance: !!editRsvpAtt, message: editRsvpMsg.trim() } : r
-      ));
       setEditingRsvpId(null);
+      await onRefresh();
     } catch { /* silent */ } finally { setRsvpSaving(false); }
-  }, [editingRsvpId, editRsvpName, editRsvpAtt, editRsvpMsg]);
+  }, [editingRsvpId, editRsvpName, editRsvpAtt, editRsvpMsg, onRefresh]);
 
   const deleteRsvp = useCallback(async (id: string) => {
     try {
       await deleteAdminRsvp(id);
-      setLocalResponses((prev) => prev.filter((r) => r.id !== id));
+      await onRefresh();
     } catch { /* silent */ }
-  }, []);
+  }, [onRefresh]);
 
-  // Agrupa respostas por convite (família ou individual) — usa localResponses para refletir edições
+  // Agrupa respostas por convite (família ou individual) — usa responses para refletir edições
   const groupedByInvite = useMemo(() => {
     const groups: { inv: typeof invites[0]; members: RsvpResponse[] }[] = [];
     const matchedIds = new Set<string>();
 
     for (const inv of invites) {
       const names = inv.guests && inv.guests.length > 0 ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[] : [inv.guest_name];
-      const members = localResponses.filter((r) =>
+      const members = responses.filter((r) =>
         names.some((n) => n.toLowerCase() === r.name.toLowerCase())
       );
       if (members.length > 0) {
@@ -697,9 +691,9 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
       }
     }
 
-    const unmatched = localResponses.filter((r) => !matchedIds.has(r.id));
+    const unmatched = responses.filter((r) => !matchedIds.has(r.id));
     return { groups, unmatched };
-  }, [invites, localResponses]);
+  }, [invites, responses]);
 
   const filteredGroups = useMemo(() => {
     const q = search.toLowerCase();
@@ -737,8 +731,8 @@ const RsvpTab = memo(({ responses }: { responses: RsvpResponse[] }) => {
       return sum + 1;
     }, 0),
   [invites]);
-  const totalConfirmados = useMemo(() => localResponses.filter((r) => r.attendance).length, [localResponses]);
-  const totalDeclinados  = useMemo(() => localResponses.filter((r) => !r.attendance).length, [localResponses]);
+  const totalConfirmados = useMemo(() => responses.filter((r) => r.attendance).length, [responses]);
+  const totalDeclinados  = useMemo(() => responses.filter((r) => !r.attendance).length, [responses]);
   const totalPendentes   = useMemo(() =>
     invites.filter((i) => !i.used).reduce((sum, i) => {
       if (i.guests && i.guests.length > 0) return sum + i.guests.filter((g) => !g.is_child).length;
@@ -1970,7 +1964,7 @@ export const AdminPanel = memo(({ onClose, onLogout }: AdminPanelProps) => {
               transition={{ duration: 0.15 }}
             >
               {tab === 'overview' && stats && <OverviewTab stats={stats} onNavigate={setTab} />}
-              {tab === 'rsvp'     && <RsvpTab responses={rsvp} />}
+              {tab === 'rsvp'     && <RsvpTab responses={rsvp} onRefresh={async () => { const r = await fetchRsvpResponses(); setRsvp(r); }} />}
               {tab === 'gifts'    && <GiftsTab summaries={summaries} contributions={contributions} />}
               {tab === 'rifa'     && rifaData && <RifaTab data={rifaData} onRefresh={refreshRifa} />}
               {tab === 'site'     && siteData && <SiteTab data={siteData} onRefresh={refreshSite} />}
