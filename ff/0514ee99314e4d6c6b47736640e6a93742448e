@@ -1,0 +1,28 @@
+src/components/RSVPOverlay.tsx
+  d174fa6eba044a99 197-205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "ff0514ee99314e4d6c6b47736640e6a93742448e",
+  "prompts": {
+    "d174fa6eba044a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "04180c6d-9726-4eb5-b4d6-58fa6a97ff41",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "alvarsoares_meli",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 0,
+      "accepted_lines": 1988,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_02c6cc34529855": {
+      "author": "alvarsoares_meli"
+    }
+  }
+}
