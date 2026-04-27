@@ -176,7 +176,7 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin size={16} className="text-[#94A684] flex-shrink-0" />
-                  <span className="text-sm text-slate-700 font-semibold">{location} <span className="font-normal text-slate-400 italic">— endereço a ser confirmado em breve</span></span>
+                  <span className="text-sm text-slate-700 font-semibold">{location}</span>
                 </div>
                 <div className="flex gap-2 pt-1 pl-7">
                   <a
@@ -193,6 +193,15 @@ export const RSVPOverlay = memo(({ onClose }: RSVPOverlayProps) => {
                   >
                     📍 Google Maps
                   </a>
+                </div>
+
+                {/* Dresscode */}
+                <div className="border-t border-slate-100 pt-2.5 flex items-start gap-3">
+                  <span className="text-base flex-shrink-0">👗</span>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-0.5">Dresscode</p>
+                    <p className="text-sm text-slate-600">Tons claros — off white, bege, marrom claro e pastéis.</p>
+                  </div>
                 </div>
               </div>
 
