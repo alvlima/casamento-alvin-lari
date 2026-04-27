@@ -1,0 +1,14 @@
+src/components/RSVPOverlay.tsx
+  h_02c6cc34529855 205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "d3698e18fcd1ed68a5bc17e3a289ea7956c53fdb",
+  "prompts": {},
+  "humans": {
+    "h_02c6cc34529855": {
+      "author": "alvarsoares_meli"
+    }
+  }
+}
