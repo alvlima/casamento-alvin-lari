@@ -1,0 +1,25 @@
+src/components/RSVPOverlay.tsx
+  d174fa6eba044a99 32,47,179-195
+src/components/AdminPanel.tsx
+  d174fa6eba044a99 608,648-652,667,669,674,676,678,685,694,696,734-735,1967
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "9b752a592830b77ece3fdaaa0d899ed2701c4a3f",
+  "prompts": {
+    "d174fa6eba044a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "04180c6d-9726-4eb5-b4d6-58fa6a97ff41",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "alvarsoares_meli",
+      "messages": [],
+      "total_additions": 2036,
+      "total_deletions": 45,
+      "accepted_lines": 2011,
+      "overriden_lines": 0
+    }
+  }
+}
