@@ -37,12 +37,13 @@ export interface InviteToken {
 // ── RSVP ────────────────────────────────────────────────────────────────────
 
 export interface RsvpResponse {
-  id: string;
-  couple_id: string;          // tenant key — nunca exposto no frontend
-  name: string;
-  attendance: boolean;
-  message: string | null;
-  created_at: string;
+  id:           string;
+  couple_id:    string;
+  invite_token: string | null;
+  name:         string;
+  attendance:   boolean;
+  message:      string | null;
+  created_at:   string;
 }
 
 // ── Presentes ────────────────────────────────────────────────────────────────

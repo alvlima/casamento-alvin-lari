@@ -681,9 +681,16 @@ const RsvpTab = memo(({ responses, onRefresh }: { responses: RsvpResponse[]; onR
     const matchedIds = new Set<string>();
 
     for (const inv of invites) {
-      const names = inv.guests && inv.guests.length > 0 ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[] : [inv.guest_name];
+      // Usa invite_token para associar quando disponível, fallback por nome
       const members = responses.filter((r) =>
-        names.some((n) => n.toLowerCase() === r.name.toLowerCase())
+        r.invite_token
+          ? r.invite_token === inv.token
+          : (() => {
+              const names = inv.guests && inv.guests.length > 0
+                ? inv.guests.map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean) as string[]
+                : [inv.guest_name];
+              return names.some((n) => n.toLowerCase() === r.name.toLowerCase());
+            })()
       );
       if (members.length > 0) {
         groups.push({ inv, members });
