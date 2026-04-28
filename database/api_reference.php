@@ -1160,7 +1160,7 @@ function handle_get_rsvp(PDO $db): void
 {
     $couple_id = get_authenticated_couple_id($db);
     $stmt = $db->prepare(
-        'SELECT id, name, attendance, message, created_at
+        'SELECT id, invite_token, name, attendance, message, created_at
            FROM rsvp_responses
           WHERE couple_id = ?
           ORDER BY created_at DESC
@@ -1220,10 +1220,11 @@ function handle_post_rsvp(PDO $db): void
     try {
         foreach ($responses as $r) {
             if ($invite['used']) {
+                // Busca pelo token do convite + nome (evita confundir nomes iguais de convites diferentes)
                 $existing = $db->prepare(
-                    'SELECT id FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
+                    'SELECT id FROM rsvp_responses WHERE couple_id = ? AND invite_token = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
                 );
-                $existing->execute([$couple_id, $r['name']]);
+                $existing->execute([$couple_id, $invite_token, $r['name']]);
                 $prev = $existing->fetch();
 
                 if ($prev) {
@@ -1232,13 +1233,13 @@ function handle_post_rsvp(PDO $db): void
                     )->execute([$r['attendance'], $message, $prev['id']]);
                 } else {
                     $db->prepare(
-                        'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
-                    )->execute([$couple_id, $r['name'], $r['attendance'], $message]);
+                        'INSERT INTO rsvp_responses (id, couple_id, invite_token, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?, ?)'
+                    )->execute([$couple_id, $invite_token, $r['name'], $r['attendance'], $message]);
                 }
             } else {
                 $db->prepare(
-                    'INSERT INTO rsvp_responses (id, couple_id, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?)'
-                )->execute([$couple_id, $r['name'], $r['attendance'], $message]);
+                    'INSERT INTO rsvp_responses (id, couple_id, invite_token, name, attendance, message) VALUES (UUID(), ?, ?, ?, ?, ?)'
+                )->execute([$couple_id, $invite_token, $r['name'], $r['attendance'], $message]);
             }
         }
 
@@ -1784,9 +1785,9 @@ function handle_invite_validate(PDO $db): void
             : [$row['guest_name']];
         foreach ($names as $name) {
             $prev = $db->prepare(
-                'SELECT attendance FROM rsvp_responses WHERE couple_id = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
+                'SELECT attendance FROM rsvp_responses WHERE couple_id = ? AND invite_token = ? AND name = ? ORDER BY created_at DESC LIMIT 1'
             );
-            $prev->execute([$couple_id, $name]);
+            $prev->execute([$couple_id, $token, $name]);
             $prev_row = $prev->fetch();
             $prev_responses[$name] = $prev_row ? (bool) $prev_row['attendance'] : null;
         }
@@ -2059,10 +2060,9 @@ function handle_admin_delete_invite(PDO $db, string $token): void
         $db->prepare('DELETE FROM invite_tokens WHERE token = ? AND couple_id = ?')
            ->execute([$token, $couple_id]);
 
-        // Remove todas as respostas RSVP do grupo
-        $placeholders = implode(',', array_fill(0, count($all_names), '?'));
-        $db->prepare("DELETE FROM rsvp_responses WHERE couple_id = ? AND name IN ({$placeholders})")
-           ->execute([$couple_id, ...$all_names]);
+        // Remove todas as respostas RSVP vinculadas ao token do convite
+        $db->prepare('DELETE FROM rsvp_responses WHERE couple_id = ? AND invite_token = ?')
+           ->execute([$couple_id, $token]);
 
         $db->commit();
     } catch (\Exception $e) {

@@ -66,16 +66,18 @@ CREATE TABLE IF NOT EXISTS alvar028_casamentos.admin_sessions (
 -- 3. CONFIRMAÇÕES DE PRESENÇA (RSVP)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS alvar028_casamentos.rsvp_responses (
-  id          CHAR(36)     NOT NULL,
-  couple_id   CHAR(36)     NOT NULL,
-  name        VARCHAR(255) NOT NULL,
-  attendance  TINYINT(1)   NOT NULL,
-  message     TEXT,
-  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id            CHAR(36)     NOT NULL,
+  couple_id     CHAR(36)     NOT NULL,
+  invite_token  VARCHAR(32)  NULL,
+  name          VARCHAR(255) NOT NULL,
+  attendance    TINYINT(1)   NOT NULL,
+  message       TEXT,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (id),
   INDEX idx_couple_attendance (couple_id, attendance),
   INDEX idx_couple_created    (couple_id, created_at),
+  INDEX idx_couple_token      (couple_id, invite_token),
   FOREIGN KEY (couple_id) REFERENCES alvar028_casamentos.couples(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
